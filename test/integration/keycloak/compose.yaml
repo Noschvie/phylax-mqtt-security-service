@@ -1,0 +1,22 @@
+# Keycloak for the integration tests (PMSS design, section 7.9).
+# Same version as production; the test realm is imported at startup.
+#
+#   docker compose up -d
+#   until curl -sf http://127.0.0.1:9000/health/ready; do sleep 3; done
+#   python3 check_tokens.py
+#   docker compose down -v
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    command: start-dev --import-realm
+    environment:
+      KC_HEALTH_ENABLED: "true"
+      # Test only: admin console for inspecting the realm
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "127.0.0.1:8180:8080"   # realm endpoints
+      - "127.0.0.1:9000:9000"   # management: /health/ready
+    volumes:
+      - ./realm:/opt/keycloak/data/import:ro

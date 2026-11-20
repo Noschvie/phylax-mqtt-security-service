@@ -1,0 +1,41 @@
+name: Keycloak integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  keycloak:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: test/integration/keycloak
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Keycloak 26.8.2 with the test realm
+        run: docker compose up -d
+      - name: Wait for Keycloak
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:9000/health/ready >/dev/null && exit 0
+            sleep 3
+          done
+          echo "Keycloak not ready" >&2
+          exit 1
+      - name: Check tokens
+        run: python3 check_tokens.py http://127.0.0.1:8180
+      - name: Save Keycloak log
+        if: failure()
+        run: docker compose logs keycloak > keycloak.log
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: keycloak-log
+          path: test/integration/keycloak/keycloak.log
+      - name: Stop Keycloak
+        if: always()
+        run: docker compose down -v
