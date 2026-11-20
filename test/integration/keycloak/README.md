@@ -13,7 +13,7 @@ Checks the Keycloak part of the integration tests from the design document (sect
 ```sh
 cd test/integration/keycloak
 docker compose up -d
-until curl -sf http://127.0.0.1:9000/health/ready >/dev/null; do sleep 3; done
+until curl -sf http://127.0.0.1:8190/health/ready >/dev/null; do sleep 3; done
 python3 check_tokens.py
 docker compose down -v
 ```

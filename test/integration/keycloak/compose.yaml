@@ -2,7 +2,7 @@
 # Same version as production; the test realm is imported at startup.
 #
 #   docker compose up -d
-#   until curl -sf http://127.0.0.1:9000/health/ready; do sleep 3; done
+#   until curl -sf http://127.0.0.1:8190/health/ready; do sleep 3; done
 #   python3 check_tokens.py
 #   docker compose down -v
 
@@ -17,6 +17,6 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     ports:
       - "127.0.0.1:8180:8080"   # realm endpoints
-      - "127.0.0.1:9000:9000"   # management: /health/ready
+      - "127.0.0.1:8190:9000"   # management: /health/ready (host 8190, 9000 is Portainer)
     volumes:
       - ./realm:/opt/keycloak/data/import:ro

@@ -21,7 +21,7 @@ jobs:
       - name: Wait for Keycloak
         run: |
           for i in $(seq 1 60); do
-            curl -sf http://127.0.0.1:9000/health/ready >/dev/null && exit 0
+            curl -sf http://127.0.0.1:8190/health/ready >/dev/null && exit 0
             sleep 3
           done
           echo "Keycloak not ready" >&2
