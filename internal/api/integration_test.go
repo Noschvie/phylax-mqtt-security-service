@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/api"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/auth"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/dynsec"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/model"
@@ -30,7 +31,7 @@ import (
 
 type allowAll struct{}
 
-func (allowAll) Authorize(r *http.Request, _ api.Scope) (*http.Request, *problem.Problem) {
+func (allowAll) Authorize(r *http.Request, _ auth.Scope) (*http.Request, *problem.Problem) {
 	return r, nil
 }
 

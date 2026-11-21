@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/auth"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/dynsec"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/model"
@@ -40,7 +41,7 @@ type Options struct {
 	// DynSec executes the commands; required for the /api/v1 endpoints.
 	DynSec Executor
 	// Auth checks the bearer token; nil denies every /api/v1 request.
-	Auth Authorizer
+	Auth auth.Authorizer
 	// BrokerVersion returns the version from $SYS/broker/version, "" if
 	// not known yet.
 	BrokerVersion func() string
@@ -61,7 +62,7 @@ func NewHandler(opts Options) http.Handler {
 		opts.Logger = slog.New(slog.DiscardHandler)
 	}
 	if opts.Auth == nil {
-		opts.Auth = DenyAll{}
+		opts.Auth = auth.DenyAll{}
 	}
 	if opts.MaxRequestBytes < config.MinRequestBytes {
 		opts.MaxRequestBytes = config.MinRequestBytes
@@ -79,7 +80,7 @@ func NewHandler(opts Options) http.Handler {
 	s.routes.HandleFunc("GET /healthz", handleHealthz)
 
 	read := func(pattern string, h http.HandlerFunc) {
-		s.routes.Handle(pattern, s.require(ScopeRead, h))
+		s.routes.Handle(pattern, s.require(auth.ScopeRead, h))
 	}
 	read("GET /api/v1/info", s.handleInfo)
 	read("GET /api/v1/export", s.handleExport)
