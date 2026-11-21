@@ -40,10 +40,14 @@ type Options struct {
 	// ClientID of the connection; empty means "pmss-" plus 8 random bytes in hex.
 	ClientID  string
 	KeepAlive time.Duration
-	// ResponseTopic is subscribed on every connection; only messages on it
-	// are passed to the handler.
+	// ResponseTopic is subscribed on every connection; Publish is possible
+	// only after the broker acknowledged it.
 	ResponseTopic string
-	Logger        *slog.Logger
+	// ExtraTopics are subscribed together with ResponseTopic, e.g.
+	// $SYS/broker/version. A refused extra topic is logged and does not
+	// block Publish.
+	ExtraTopics []string
+	Logger      *slog.Logger
 
 	// ConnectTimeout limits one connection attempt; default 10s.
 	ConnectTimeout time.Duration
@@ -85,9 +89,13 @@ func New(opts Options) *Conn {
 func (c *Conn) ClientID() string { return c.opts.ClientID }
 
 // Start connects in the background and keeps reconnecting until ctx ends
-// or Close is called. onMessage receives the payload of every message on
-// the response topic; it must not block for long.
-func (c *Conn) Start(ctx context.Context, onMessage func(payload []byte)) error {
+// or Close is called. onMessage receives every message on the response
+// topic and the extra topics; it must not block for long.
+func (c *Conn) Start(ctx context.Context, onMessage func(topic string, payload []byte)) error {
+	wanted := map[string]bool{c.opts.ResponseTopic: true}
+	for _, t := range c.opts.ExtraTopics {
+		wanted[t] = true
+	}
 	cfg := autopaho.ClientConfig{
 		ServerUrls: []*url.URL{c.opts.BrokerURL},
 		TlsCfg:     c.opts.TLS,
@@ -106,8 +114,8 @@ func (c *Conn) Start(ctx context.Context, onMessage func(payload []byte)) error 
 			ClientID: c.opts.ClientID,
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
 				func(pr paho.PublishReceived) (bool, error) {
-					if pr.Packet.Topic == c.opts.ResponseTopic {
-						onMessage(pr.Packet.Payload)
+					if wanted[pr.Packet.Topic] {
+						onMessage(pr.Packet.Topic, pr.Packet.Payload)
 					}
 					return true, nil
 				},
@@ -169,12 +177,19 @@ func (c *Conn) subscribe(cm *autopaho.ConnectionManager, gen uint64) {
 		if !c.current(gen) {
 			return
 		}
+		subs := []paho.SubscribeOptions{{Topic: c.opts.ResponseTopic, QoS: 1}}
+		for _, t := range c.opts.ExtraTopics {
+			subs = append(subs, paho.SubscribeOptions{Topic: t, QoS: 0})
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), c.opts.ConnectTimeout)
-		suback, err := cm.Subscribe(ctx, &paho.Subscribe{
-			Subscriptions: []paho.SubscribeOptions{{Topic: c.opts.ResponseTopic, QoS: 1}},
-		})
+		suback, err := cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: subs})
 		cancel()
-		if err == nil && len(suback.Reasons) == 1 && suback.Reasons[0] < 0x80 {
+		if err == nil && len(suback.Reasons) == len(subs) && suback.Reasons[0] < 0x80 {
+			for i, t := range c.opts.ExtraTopics {
+				if code := suback.Reasons[i+1]; code >= 0x80 {
+					c.opts.Logger.Warn("subscription refused", "topic", t, "reason_code", code)
+				}
+			}
 			c.mu.Lock()
 			if c.gen == gen {
 				select {

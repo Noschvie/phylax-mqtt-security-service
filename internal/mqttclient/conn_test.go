@@ -142,7 +142,7 @@ func TestPublishWithoutBroker(t *testing.T) {
 		BrokerURL: &url.URL{Scheme: "mqtts", Host: addr}, TLS: cfg, KeepAlive: 30 * time.Second,
 		ResponseTopic: "r", Backoff: func(int) time.Duration { return 50 * time.Millisecond },
 	})
-	must(t, c.Start(ctx, func([]byte) {}))
+	must(t, c.Start(ctx, func(string, []byte) {}))
 	defer c.Close(context.Background())
 
 	pctx, pcancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
