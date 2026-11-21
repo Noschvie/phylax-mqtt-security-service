@@ -19,10 +19,10 @@ set -eu
 
 DIR=${1:-./run}
 HERE=$(cd "$(dirname "$0")" && pwd)
-CERTS="$DIR/certs"
 rm -rf "$DIR"
-mkdir -p "$CERTS" "$DIR/data"
-cd "$CERTS"
+mkdir -p "$DIR/certs" "$DIR/data"
+DIR=$(cd "$DIR" && pwd) # absolute, the script changes into certs/
+cd "$DIR/certs"
 
 ca() { # name subject
 	openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "$2" \
