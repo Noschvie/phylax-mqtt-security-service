@@ -28,6 +28,17 @@ jobs:
           exit 1
       - name: Check tokens
         run: python3 check_tokens.py http://127.0.0.1:8180
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: JWT verification with go-oidc (probe, unit tests and against Keycloak)
+        working-directory: test/probes/jwt-go-oidc
+        env:
+          PMSS_TEST_KEYCLOAK: http://127.0.0.1:8180
+        run: |
+          go mod tidy
+          go test -race -v ./...
       - name: Save Keycloak log
         if: failure()
         run: docker compose logs keycloak > keycloak.log
