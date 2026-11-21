@@ -1,0 +1,20 @@
+# Mosquitto with Dynamic Security for the integration test of the broker
+# connection (PMSS design, sections 7.2 and 7.9). Same version as
+# production. Create the test PKI first:
+#
+#   ./make-certs.sh
+#   docker compose up -d
+#   PMSS_TEST_BROKER_URL=mqtts://127.0.0.1:18884 \
+#   PMSS_TEST_BROKER_CERTS=$PWD/run/certs \
+#     go test -race -run Integration ../../../internal/...
+#   docker compose down
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.1.2-alpine   # same version as production; Docker Hub has no plain 2.1.2 tag
+    ports:
+      - "127.0.0.1:18884:8884"   # admin listener, mTLS
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./run/certs:/mosquitto/certs:ro
+      - ./run/data:/mosquitto/data
