@@ -33,25 +33,32 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestLoadOverrides(t *testing.T) {
 	cfg, err := Load(env(map[string]string{
-		EnvListenAddr:        "127.0.0.1:9000",
-		EnvLogLevel:          "debug",
-		EnvShutdownTimeout:   "5s",
-		EnvReadHeaderTimeout: "2s",
-		EnvReadTimeout:       "10s",
-		EnvWriteTimeout:      "1m",
-		EnvIdleTimeout:       "2m",
-		EnvMQTTBrokerURL:     "mqtts://127.0.0.1:18884",
-		EnvMQTTServerName:    "mosquitto",
-		EnvMQTTCAFile:        "/certs/ca.crt",
-		EnvMQTTCertFile:      "/certs/admin.crt",
-		EnvMQTTKeyFile:       "/certs/admin.key",
-		EnvMQTTClientID:      "pmss-test",
-		EnvMQTTKeepAlive:     "10s",
-		EnvDynsecTimeout:     "3s",
-		EnvRolePrefix:        "x_",
-		EnvGroupPrefix:       "y_",
-		EnvClientMarker:      "managed-by: other",
-		EnvMaxRequestBytes:   "2097152",
+		EnvListenAddr:         "127.0.0.1:9000",
+		EnvLogLevel:           "debug",
+		EnvShutdownTimeout:    "5s",
+		EnvReadHeaderTimeout:  "2s",
+		EnvReadTimeout:        "10s",
+		EnvWriteTimeout:       "1m",
+		EnvIdleTimeout:        "2m",
+		EnvMQTTBrokerURL:      "mqtts://127.0.0.1:18884",
+		EnvMQTTServerName:     "mosquitto",
+		EnvMQTTCAFile:         "/certs/ca.crt",
+		EnvMQTTCertFile:       "/certs/admin.crt",
+		EnvMQTTKeyFile:        "/certs/admin.key",
+		EnvMQTTClientID:       "pmss-test",
+		EnvMQTTKeepAlive:      "10s",
+		EnvDynsecTimeout:      "3s",
+		EnvRolePrefix:         "x_",
+		EnvGroupPrefix:        "y_",
+		EnvClientMarker:       "managed-by: other",
+		EnvMaxRequestBytes:    "2097152",
+		EnvOIDCIssuer:         "http://127.0.0.1:8180/realms/pmss-test",
+		EnvOIDCAudience:       "pmss",
+		EnvOIDCJWKSURL:        "http://keycloak:8080/realms/pmss-test/protocol/openid-connect/certs",
+		EnvOIDCScopeRead:      "pmss.read",
+		EnvOIDCScopeWrite:     "pmss.write",
+		EnvOIDCAllowHTTP:      "true",
+		EnvOIDCJWKSMinRefresh: "30s",
 	}))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -66,6 +73,11 @@ func TestLoadOverrides(t *testing.T) {
 		IdleTimeout:       2 * time.Minute,
 		MaxRequestBytes:   2 << 20,
 		Managed:           Managed{RolePrefix: "x_", GroupPrefix: "y_", ClientMarker: "managed-by: other"},
+		OIDC: OIDC{
+			Issuer: "http://127.0.0.1:8180/realms/pmss-test", Audience: "pmss",
+			JWKSURL:   "http://keycloak:8080/realms/pmss-test/protocol/openid-connect/certs",
+			ScopeRead: "pmss.read", ScopeWrite: "pmss.write", AllowHTTP: true, JWKSMinRefresh: 30 * time.Second,
+		},
 		MQTT: MQTT{
 			BrokerURL:      &url.URL{Scheme: "mqtts", Host: "127.0.0.1:18884"},
 			ServerName:     "mosquitto",
@@ -164,6 +176,32 @@ func TestLoadManagedAndLimits(t *testing.T) {
 		"role prefix pmss-":         {EnvRolePrefix: "pmss-"},
 		"role prefix of reserved":   {EnvRolePrefix: "role_"},
 		"group prefix inside pmss-": {EnvGroupPrefix: "pm"},
+	} {
+		if _, err := Load(env(e)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestLoadOIDC(t *testing.T) {
+	cfg, err := Load(env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.OIDC.Issuer != "" || cfg.OIDC.Audience != "phylax-mqtt-security-service" || cfg.OIDC.ScopeRead != "read" || cfg.OIDC.ScopeWrite != "write" {
+		t.Errorf("defaults %+v", cfg.OIDC)
+	}
+	if _, err := Load(env(map[string]string{EnvOIDCIssuer: "https://kc.example.org/realms/pmss"})); err != nil {
+		t.Errorf("https issuer: %v", err)
+	}
+	for name, e := range map[string]map[string]string{
+		"http without allow": {EnvOIDCIssuer: "http://kc.example.org/realms/pmss"},
+		"relative":           {EnvOIDCIssuer: "/realms/pmss"},
+		"other scheme":       {EnvOIDCIssuer: "ftp://kc.example.org/realms/pmss"},
+		"query":              {EnvOIDCIssuer: "https://kc.example.org/realms/pmss?x=1"},
+		"jwks over http":     {EnvOIDCIssuer: "https://kc.example.org/realms/pmss", EnvOIDCJWKSURL: "http://keycloak/certs"},
+		"allow not a bool":   {EnvOIDCAllowHTTP: "yes please"},
+		"same scope names":   {EnvOIDCScopeRead: "x", EnvOIDCScopeWrite: "x"},
 	} {
 		if _, err := Load(env(e)); err == nil {
 			t.Errorf("%s: accepted", name)
