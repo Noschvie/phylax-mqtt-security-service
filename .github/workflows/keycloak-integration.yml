@@ -30,7 +30,7 @@ jobs:
         run: python3 check_tokens.py http://127.0.0.1:8180
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version-file: go.mod
           cache: false
       - name: JWT verification with go-oidc (probe, unit tests and against Keycloak)
         working-directory: test/probes/jwt-go-oidc
@@ -39,6 +39,11 @@ jobs:
         run: |
           go mod tidy
           go test -race -v ./...
+      - name: Token check of the service against Keycloak
+        working-directory: .
+        env:
+          PMSS_TEST_KEYCLOAK: http://127.0.0.1:8180
+        run: go test -race -count=1 -v -run Keycloak ./internal/auth/
       - name: Save Keycloak log
         if: failure()
         run: docker compose logs keycloak > keycloak.log

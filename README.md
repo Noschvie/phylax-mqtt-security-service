@@ -2,7 +2,7 @@
 
 A REST API service for managing Mosquitto Dynamic Security clients, roles and access control.
 
-**Status:** under development. In place: service skeleton (configuration, structured logging, health check, graceful shutdown, container image, CI) the connection to the Dynamic Security Control API (mTLS, MQTT 5, correlation of responses, reconnect) and the reading endpoints of the interface specification "MQTT Security Service API v1". The token check (Keycloak) and the changing endpoints follow. **Until the token check is in place, every `/api/v1` request is refused with `401`.**
+**Status:** under development. In place: service skeleton (configuration, structured logging, health check, graceful shutdown, container image, CI) the connection to the Dynamic Security Control API (mTLS, MQTT 5, correlation of responses, reconnect) and the reading endpoints of the interface specification "MQTT Security Service API v1" with the token check for Keycloak access tokens. The changing endpoints follow. **Without `PMSS_OIDC_ISSUER` every `/api/v1` request is refused with `401`.**
 
 So far this repository contains:
 
@@ -22,6 +22,7 @@ Broker-side tests (Mosquitto 2.1.2 with Dynamic Security) live in [mqtt-acl-veri
 | `internal/api/` | HTTP server, routes, access log |
 | `internal/mqttclient/` | MQTT 5 connection to the admin listener (`autopaho`, mTLS, subscription in `OnConnectionUp`) |
 | `internal/dynsec/` | DynSec commands, `correlationData`, timeouts, error kinds |
+| `internal/auth/` | Token check: go-oidc plus `typ` and scopes, throttled JWKS key set, caller for the audit |
 | `internal/model/` | API objects from DynSec data: defaults, sorting, ETag, managed flag, `authType` |
 | `internal/problem/` | Error responses (`problem+json`, codes in [docs/errors.md](docs/errors.md)) |
 | `internal/testbroker/` | Helpers for the integration tests |
@@ -79,6 +80,13 @@ All settings are environment variables with defaults. Invalid values stop the se
 | `PMSS_GROUP_PREFIX` | `tf_` | Prefix of managed groups |
 | `PMSS_CLIENT_MARKER` | `managed-by: pmss` | `textdescription` of managed clients |
 | `PMSS_MAX_REQUEST_BYTES` | `1048576` | Largest request body, at least 1 MiB |
+| `PMSS_OIDC_ISSUER` | – | Keycloak realm URL, e.g. `https://kc.example.org/realms/pmss`; `iss` must match exactly. Empty: API closed |
+| `PMSS_OIDC_AUDIENCE` | `phylax-mqtt-security-service` | Must be contained in `aud` |
+| `PMSS_OIDC_JWKS_URL` | from discovery | JWKS address, e.g. an internal URL of Keycloak |
+| `PMSS_OIDC_SCOPE_READ` | `read` | Scope name for reading endpoints |
+| `PMSS_OIDC_SCOPE_WRITE` | `write` | Scope name for changing endpoints |
+| `PMSS_OIDC_JWKS_MIN_REFRESH` | `1m` | Minimum time between JWKS fetches for unknown key IDs |
+| `PMSS_OIDC_ALLOW_HTTP` | `false` | Allow `http://` for issuer and JWKS (test setups only) |
 | `PMSS_DYNSEC_TIMEOUT` | `5s` | Limit per DynSec command (waiting for the connection, publish, response); shorter than `PMSS_HTTP_WRITE_TIMEOUT` |
 
 Durations use Go syntax (`500ms`, `15s`, `1m`) and must be greater than 0. The service does not start if the CA or the client certificate cannot be loaded.
@@ -92,6 +100,15 @@ Decision A-9 of the design (section 7.2):
 - Every command carries its own `correlationData` (UUID string). Responses for other subscribers (e.g. `mosquitto_ctrl` of the break-glass admin) are dropped.
 - Without a connection a command waits at most `PMSS_DYNSEC_TIMEOUT` and fails as *unavailable*; it is not sent later. Without a response in time it fails as *timeout*: the command may have been executed.
 - The HTTP server starts without waiting for the broker; the connection is retried in the background (0, 1s, 2s … 30s).
+
+## Token check
+
+Every `/api/v1` request needs `Authorization: Bearer <access token>` from Keycloak (design 7.5, T-7, SEC-15):
+
+- `coreos/go-oidc/v3` checks the signature (`RS256`, `ES256` only), `iss`, `aud` (contains the audience), `exp` (no leeway) and `nbf` (5 min leeway).
+- The service checks `typ == "Bearer"` (ID and refresh tokens are refused), `sub` present and the scope: `read` for `GET`, `write` for changes; `write` does not include `read`. Roles are not checked – Keycloak issues `write` only to `security-admin`.
+- Discovery and JWKS are fetched on the first token, so the service starts without Keycloak. An unknown key ID triggers at most one JWKS fetch per `PMSS_OIDC_JWKS_MIN_REFRESH`; after a failed fetch the next try is 5 s later. Known keys keep working while Keycloak is down.
+- `401 invalid_token` and `403 insufficient_scope` carry `WWW-Authenticate` (RFC 6750). The reason of a rejection is logged, never the token.
 
 ## Endpoints
 

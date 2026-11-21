@@ -38,6 +38,14 @@ const (
 	EnvGroupPrefix     = "PMSS_GROUP_PREFIX"
 	EnvClientMarker    = "PMSS_CLIENT_MARKER"
 	EnvMaxRequestBytes = "PMSS_MAX_REQUEST_BYTES"
+
+	EnvOIDCIssuer         = "PMSS_OIDC_ISSUER"
+	EnvOIDCAudience       = "PMSS_OIDC_AUDIENCE"
+	EnvOIDCJWKSURL        = "PMSS_OIDC_JWKS_URL"
+	EnvOIDCScopeRead      = "PMSS_OIDC_SCOPE_READ"
+	EnvOIDCScopeWrite     = "PMSS_OIDC_SCOPE_WRITE"
+	EnvOIDCAllowHTTP      = "PMSS_OIDC_ALLOW_HTTP"
+	EnvOIDCJWKSMinRefresh = "PMSS_OIDC_JWKS_MIN_REFRESH"
 )
 
 // MinRequestBytes is the smallest allowed body limit (specification S-11).
@@ -64,8 +72,30 @@ type Config struct {
 	// Managed says which DynSec objects the service may change (design 6.4).
 	Managed Managed
 
+	// OIDC is the token check (design 7.5).
+	OIDC OIDC
+
 	// MQTT holds the connection to the Dynamic Security Control API.
 	MQTT MQTT
+}
+
+// OIDC holds the token check. Without Issuer the API refuses every request.
+type OIDC struct {
+	// Issuer is the Keycloak realm URL; iss must match exactly.
+	Issuer string
+	// Audience must be contained in aud (client ID of the service).
+	Audience string
+	// JWKSURL overrides jwks_uri from the discovery document, e.g. an
+	// internal address of Keycloak.
+	JWKSURL string
+	// ScopeRead and ScopeWrite are the scope names in the token.
+	ScopeRead  string
+	ScopeWrite string
+	// AllowHTTP permits http:// for Issuer and JWKSURL (test setups only).
+	AllowHTTP bool
+	// JWKSMinRefresh is the minimum time between two JWKS fetches for
+	// unknown key IDs (T-7).
+	JWKSMinRefresh time.Duration
 }
 
 // Managed holds the marks of managed objects. They are configurable so that
@@ -111,6 +141,12 @@ func Default() Config {
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxRequestBytes:   MinRequestBytes,
+		OIDC: OIDC{
+			Audience:       "phylax-mqtt-security-service",
+			ScopeRead:      "read",
+			ScopeWrite:     "write",
+			JWKSMinRefresh: time.Minute,
+		},
 		Managed: Managed{
 			RolePrefix:   "tf_",
 			GroupPrefix:  "tf_",
@@ -155,6 +191,7 @@ func Load(getenv func(string) string) (Config, error) {
 		{EnvWriteTimeout, &cfg.WriteTimeout},
 		{EnvIdleTimeout, &cfg.IdleTimeout},
 		{EnvMQTTKeepAlive, &cfg.MQTT.KeepAlive},
+		{EnvOIDCJWKSMinRefresh, &cfg.OIDC.JWKSMinRefresh},
 		{EnvDynsecTimeout, &cfg.MQTT.CommandTimeout},
 	}
 	for _, d := range durations {
@@ -202,10 +239,37 @@ func Load(getenv func(string) string) (Config, error) {
 		{EnvRolePrefix, &cfg.Managed.RolePrefix},
 		{EnvGroupPrefix, &cfg.Managed.GroupPrefix},
 		{EnvClientMarker, &cfg.Managed.ClientMarker},
+		{EnvOIDCIssuer, &cfg.OIDC.Issuer},
+		{EnvOIDCAudience, &cfg.OIDC.Audience},
+		{EnvOIDCJWKSURL, &cfg.OIDC.JWKSURL},
+		{EnvOIDCScopeRead, &cfg.OIDC.ScopeRead},
+		{EnvOIDCScopeWrite, &cfg.OIDC.ScopeWrite},
 	} {
 		if v := get(s.env); v != "" {
 			*s.dst = v
 		}
+	}
+
+	if v := get(EnvOIDCAllowHTTP); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: true or false, got %q", EnvOIDCAllowHTTP, v))
+		}
+		cfg.OIDC.AllowHTTP = b
+	}
+	for _, u := range []struct{ env, val string }{
+		{EnvOIDCIssuer, cfg.OIDC.Issuer},
+		{EnvOIDCJWKSURL, cfg.OIDC.JWKSURL},
+	} {
+		if u.val == "" {
+			continue
+		}
+		if err := checkOIDCURL(u.val, cfg.OIDC.AllowHTTP); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", u.env, err))
+		}
+	}
+	if cfg.OIDC.ScopeRead == cfg.OIDC.ScopeWrite {
+		errs = append(errs, fmt.Errorf("%s and %s must differ", EnvOIDCScopeRead, EnvOIDCScopeWrite))
 	}
 
 	if v := get(EnvMaxRequestBytes); v != "" {
@@ -245,6 +309,24 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, errors.Join(errs...)
 	}
 	return cfg, nil
+}
+
+// checkOIDCURL: absolute https URL (http only with allowHTTP), without
+// user, query or fragment. A JWKS over plain HTTP would let anyone on the
+// path inject signing keys.
+func checkOIDCURL(raw string, allowHTTP bool) error {
+	u, err := url.Parse(raw)
+	switch {
+	case err != nil || u.Host == "":
+		return errors.New("not an absolute URL")
+	case u.Scheme == "http" && !allowHTTP:
+		return fmt.Errorf("http is only allowed with %s=true", EnvOIDCAllowHTTP)
+	case u.Scheme != "https" && u.Scheme != "http":
+		return fmt.Errorf("scheme must be https, got %q", u.Scheme)
+	case u.User != nil || u.RawQuery != "" || u.Fragment != "":
+		return errors.New("no user, query or fragment allowed")
+	}
+	return nil
 }
 
 // TLSServerName returns the name checked against the broker certificate.

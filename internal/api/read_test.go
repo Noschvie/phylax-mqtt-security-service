@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/auth"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/dynsec"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/problem"
@@ -49,12 +50,14 @@ func (f *fakeDynSec) Execute(_ context.Context, cmd dynsec.Command) (json.RawMes
 // allowAll grants every scope; denyWrite grants only read.
 type allowAll struct{}
 
-func (allowAll) Authorize(r *http.Request, _ Scope) (*http.Request, *problem.Problem) { return r, nil }
+func (allowAll) Authorize(r *http.Request, _ auth.Scope) (*http.Request, *problem.Problem) {
+	return r, nil
+}
 
-type onlyScope Scope
+type onlyScope auth.Scope
 
-func (o onlyScope) Authorize(r *http.Request, s Scope) (*http.Request, *problem.Problem) {
-	if Scope(o) != s {
+func (o onlyScope) Authorize(r *http.Request, s auth.Scope) (*http.Request, *problem.Problem) {
+	if auth.Scope(o) != s {
 		return nil, &problem.Problem{Code: problem.InsufficientScope, WWWAuthenticate: `Bearer error="insufficient_scope", scope="` + string(s) + `"`}
 	}
 	return r, nil
@@ -83,14 +86,14 @@ var brokerState = map[string]string{
 	"getRole:tf_role_homeassistant":          `{"role":{"rolename":"tf_role_homeassistant","acls":[{"acltype":"publishClientReceive","topic":"stat/#","priority":0,"allow":true}]}}`,
 }
 
-func newTestHandler(f *fakeDynSec, auth Authorizer) http.Handler {
+func newTestHandler(f *fakeDynSec, authorizer auth.Authorizer) http.Handler {
 	return NewHandler(Options{
 		Logger:          discard(),
 		Version:         "v0.0.0-test",
 		Managed:         config.Default().Managed,
 		MaxRequestBytes: config.MinRequestBytes,
 		DynSec:          f,
-		Auth:            auth,
+		Auth:            authorizer,
 		BrokerVersion:   func() string { return "2.1.2" },
 		Now:             func() time.Time { return time.Date(2026, 11, 20, 22, 30, 12, 0, time.FixedZone("CET", 3600)) },
 	})
@@ -310,13 +313,13 @@ func TestAuthorization(t *testing.T) {
 	}
 
 	// Reading needs scope read; write alone is not enough.
-	h = newTestHandler(&fakeDynSec{data: brokerState}, onlyScope(ScopeWrite))
+	h = newTestHandler(&fakeDynSec{data: brokerState}, onlyScope(auth.ScopeWrite))
 	rec := do(t, h, http.MethodGet, "/api/v1/export")
 	checkProblem(t, rec, 403, problem.InsufficientScope)
 	if !strings.Contains(rec.Header().Get("WWW-Authenticate"), `scope="read"`) {
 		t.Errorf("WWW-Authenticate %q", rec.Header().Get("WWW-Authenticate"))
 	}
-	h = newTestHandler(&fakeDynSec{data: brokerState}, onlyScope(ScopeRead))
+	h = newTestHandler(&fakeDynSec{data: brokerState}, onlyScope(auth.ScopeRead))
 	if rec := do(t, h, http.MethodGet, "/api/v1/export"); rec.Code != 200 {
 		t.Errorf("read scope: %d", rec.Code)
 	}
