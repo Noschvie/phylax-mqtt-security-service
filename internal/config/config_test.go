@@ -48,6 +48,10 @@ func TestLoadOverrides(t *testing.T) {
 		EnvMQTTClientID:      "pmss-test",
 		EnvMQTTKeepAlive:     "10s",
 		EnvDynsecTimeout:     "3s",
+		EnvRolePrefix:        "x_",
+		EnvGroupPrefix:       "y_",
+		EnvClientMarker:      "managed-by: other",
+		EnvMaxRequestBytes:   "2097152",
 	}))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -60,6 +64,8 @@ func TestLoadOverrides(t *testing.T) {
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      time.Minute,
 		IdleTimeout:       2 * time.Minute,
+		MaxRequestBytes:   2 << 20,
+		Managed:           Managed{RolePrefix: "x_", GroupPrefix: "y_", ClientMarker: "managed-by: other"},
 		MQTT: MQTT{
 			BrokerURL:      &url.URL{Scheme: "mqtts", Host: "127.0.0.1:18884"},
 			ServerName:     "mosquitto",
@@ -141,5 +147,26 @@ func TestLoadCommandTimeoutBelowWriteTimeout(t *testing.T) {
 	_, err := Load(env(map[string]string{EnvDynsecTimeout: "30s"}))
 	if err == nil || !strings.Contains(err.Error(), EnvDynsecTimeout) {
 		t.Errorf("want error for %s >= %s, got %v", EnvDynsecTimeout, EnvWriteTimeout, err)
+	}
+}
+
+func TestLoadManagedAndLimits(t *testing.T) {
+	cfg, err := Load(env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MaxRequestBytes != MinRequestBytes || cfg.Managed != (Managed{"tf_", "tf_", "managed-by: pmss"}) {
+		t.Errorf("defaults %d %+v", cfg.MaxRequestBytes, cfg.Managed)
+	}
+	for name, e := range map[string]map[string]string{
+		"limit below 1 MiB":         {EnvMaxRequestBytes: "1048575"},
+		"limit not a number":        {EnvMaxRequestBytes: "1M"},
+		"role prefix pmss-":         {EnvRolePrefix: "pmss-"},
+		"role prefix of reserved":   {EnvRolePrefix: "role_"},
+		"group prefix inside pmss-": {EnvGroupPrefix: "pm"},
+	} {
+		if _, err := Load(env(e)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

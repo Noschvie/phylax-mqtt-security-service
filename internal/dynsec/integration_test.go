@@ -3,25 +3,15 @@
 package dynsec_test
 
 // Integration tests against Mosquitto with Dynamic Security, see
-// test/integration/broker. They run only if PMSS_TEST_BROKER_URL is set:
-//
-//	PMSS_TEST_BROKER_URL     e.g. mqtts://127.0.0.1:18884
-//	PMSS_TEST_BROKER_CERTS   directory created by make-certs.sh (…/run/certs)
-//	PMSS_TEST_BROKER_SERVER_NAME  SAN to check, default mosquitto
+// test/integration/broker and package testbroker.
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
-	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -29,112 +19,24 @@ import (
 
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/dynsec"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/mqttclient"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/testbroker"
 )
 
-type broker struct {
-	url        *url.URL
-	certs      string
-	serverName string
-}
-
-func testBroker(t *testing.T) broker {
+// connect opens a connection with the client certificate name to addr
+// ("" = the broker itself).
+func connect(t *testing.T, b testbroker.Broker, name, addr string, waitReady bool) (*mqttclient.Conn, *dynsec.Client) {
 	t.Helper()
-	raw := os.Getenv("PMSS_TEST_BROKER_URL")
-	if raw == "" {
-		t.Skip("PMSS_TEST_BROKER_URL not set; see test/integration/broker")
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		t.Fatalf("PMSS_TEST_BROKER_URL: %v", err)
-	}
-	b := broker{url: u, certs: os.Getenv("PMSS_TEST_BROKER_CERTS"), serverName: os.Getenv("PMSS_TEST_BROKER_SERVER_NAME")}
-	if b.certs == "" {
-		t.Fatal("PMSS_TEST_BROKER_CERTS not set")
-	}
-	if b.serverName == "" {
-		b.serverName = "mosquitto"
-	}
-	return b
+	return testbroker.Connect(t, b, testbroker.Options{Cert: name, Addr: addr, WaitReady: waitReady})
 }
 
-func testLogger(t *testing.T) *slog.Logger {
-	if testing.Verbose() {
-		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})).With("test", t.Name())
-	}
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
+var (
+	testBroker = testbroker.FromEnv
+	waitFor    = testbroker.WaitFor
+	randomName = testbroker.RandomName
+)
 
-// connect opens a connection with the client certificate name (…/name.crt)
-// to addr and returns the DynSec client. waitReady: fail unless the
-// response topic is subscribed within 10 s.
-func connect(t *testing.T, b broker, name, addr string, waitReady bool) (*mqttclient.Conn, *dynsec.Client) {
-	t.Helper()
-	tlsCfg, id, err := mqttclient.LoadTLS(filepath.Join(b.certs, "server-ca.crt"),
-		filepath.Join(b.certs, name+".crt"), filepath.Join(b.certs, name+".key"), b.serverName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if addr == "" {
-		addr = b.url.Host
-	}
-	logger := testLogger(t).With("identity", id.CommonName)
-	conn := mqttclient.New(mqttclient.Options{
-		BrokerURL:      &url.URL{Scheme: "mqtts", Host: addr},
-		TLS:            tlsCfg,
-		KeepAlive:      30 * time.Second,
-		ResponseTopic:  dynsec.ResponseTopic,
-		Logger:         logger,
-		ConnectTimeout: 2 * time.Second,
-		Backoff:        func(int) time.Duration { return 100 * time.Millisecond },
-	})
-	client := dynsec.NewClient(conn, 5*time.Second, logger)
-	ctx, cancel := context.WithCancel(context.Background())
-	if err := conn.Start(ctx, client.HandleMessage); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		closeCtx, c := context.WithTimeout(context.Background(), 2*time.Second)
-		defer c()
-		_ = conn.Close(closeCtx)
-		cancel()
-	})
-	if waitReady {
-		waitFor(t, 10*time.Second, conn.Ready, "connection ready")
-	}
-	return conn, client
-}
-
-func waitFor(t *testing.T, d time.Duration, cond func() bool, what string) {
-	t.Helper()
-	deadline := time.Now().Add(d)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timeout waiting for %s", what)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-}
-
-// Changing commands, only for these tests; the service gets its own with
-// the write endpoints.
-type createClient struct {
-	Username        string `json:"username"`
-	Textdescription string `json:"textdescription,omitempty"`
-}
-
-func (createClient) CommandName() string { return "createClient" }
-
-type deleteClient struct {
-	Username string `json:"username"`
-}
-
-func (deleteClient) CommandName() string { return "deleteClient" }
-
-func randomName(prefix string) string {
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	return prefix + hex.EncodeToString(b)
-}
+type createClient = testbroker.CreateClient
+type deleteClient = testbroker.DeleteClient
 
 type clientData struct {
 	Client map[string]json.RawMessage `json:"client"`
@@ -246,7 +148,7 @@ func TestIntegrationParallelTwoAdmins(t *testing.T) {
 // not do it by itself, design 7.2) and commands work.
 func TestIntegrationReconnect(t *testing.T) {
 	b := testBroker(t)
-	p := newProxy(t, b.url.Host)
+	p := newProxy(t, b.URL.Host)
 	conn, c := connect(t, b, "pmss-admin", p.addr(), true)
 
 	if _, err := c.Execute(context.Background(), dynsec.ListClients{}); err != nil {
@@ -269,7 +171,7 @@ func TestIntegrationReconnect(t *testing.T) {
 // with ErrUnavailable and does not send the command later.
 func TestIntegrationBrokerDown(t *testing.T) {
 	b := testBroker(t)
-	p := newProxy(t, b.url.Host)
+	p := newProxy(t, b.URL.Host)
 	p.refuse(true)
 	_, c := connect(t, b, "pmss-admin", p.addr(), false)
 

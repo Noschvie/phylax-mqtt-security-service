@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -105,18 +107,40 @@ func serve(getenv func(string) string, stdout io.Writer) int {
 		ClientID:      cfg.MQTT.ClientID,
 		KeepAlive:     cfg.MQTT.KeepAlive,
 		ResponseTopic: dynsec.ResponseTopic,
+		ExtraTopics:   []string{brokerVersionTopic},
 		Logger:        logger.With("component", "mqtt"),
 	})
-	// dyn is handed to the API endpoints in the next step.
 	dyn := dynsec.NewClient(conn, cfg.MQTT.CommandTimeout, logger.With("component", "dynsec"))
+	var brokerVersion atomic.Value // string from $SYS/broker/version
+	brokerVersion.Store("")
 	connCtx, cancelConn := context.WithCancel(context.Background())
 	defer cancelConn()
-	if err := conn.Start(connCtx, dyn.HandleMessage); err != nil {
+	onMessage := func(topic string, payload []byte) {
+		switch topic {
+		case dynsec.ResponseTopic:
+			dyn.HandleMessage(payload)
+		case brokerVersionTopic:
+			brokerVersion.Store(parseBrokerVersion(string(payload)))
+		}
+	}
+	if err := conn.Start(connCtx, onMessage); err != nil {
 		logger.Error("broker connection", "error", err)
 		return 1
 	}
 
-	srv := api.NewServer(cfg, api.NewHandler(logger), logger)
+	// The token check (Keycloak) follows; until then every /api/v1
+	// request is refused with 401.
+	logger.Warn("token verification not configured; all /api/v1 requests are refused")
+	handler := api.NewHandler(api.Options{
+		Logger:          logger,
+		Version:         version,
+		Managed:         cfg.Managed,
+		MaxRequestBytes: cfg.MaxRequestBytes,
+		DynSec:          dyn,
+		Auth:            api.DenyAll{},
+		BrokerVersion:   func() string { return brokerVersion.Load().(string) },
+	})
+	srv := api.NewServer(cfg, handler, logger)
 	err = runServer(ctx, srv, cfg.ShutdownTimeout, logger)
 
 	// Disconnect from the broker after the last request.
@@ -162,6 +186,19 @@ func runServer(ctx context.Context, srv *http.Server, timeout time.Duration, log
 	}
 	logger.Info("service stopped")
 	return nil
+}
+
+// brokerVersionTopic is retained by Mosquitto, e.g. "mosquitto version 2.1.2";
+// role_security_manager may read $SYS/# (design 6.2).
+const brokerVersionTopic = "$SYS/broker/version"
+
+// parseBrokerVersion returns "2.1.2" from "mosquitto version 2.1.2".
+func parseBrokerVersion(payload string) string {
+	payload = strings.TrimSpace(payload)
+	if i := strings.LastIndexByte(payload, ' '); i >= 0 {
+		return payload[i+1:]
+	}
+	return payload
 }
 
 // healthURL derives the URL of /healthz on the local host from the listen

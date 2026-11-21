@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -32,7 +33,15 @@ const (
 	EnvMQTTClientID   = "PMSS_MQTT_CLIENT_ID"
 	EnvMQTTKeepAlive  = "PMSS_MQTT_KEEPALIVE"
 	EnvDynsecTimeout  = "PMSS_DYNSEC_TIMEOUT"
+
+	EnvRolePrefix      = "PMSS_ROLE_PREFIX"
+	EnvGroupPrefix     = "PMSS_GROUP_PREFIX"
+	EnvClientMarker    = "PMSS_CLIENT_MARKER"
+	EnvMaxRequestBytes = "PMSS_MAX_REQUEST_BYTES"
 )
+
+// MinRequestBytes is the smallest allowed body limit (specification S-11).
+const MinRequestBytes = 1 << 20
 
 // Config of the Security Service.
 type Config struct {
@@ -49,8 +58,22 @@ type Config struct {
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
 
+	// MaxRequestBytes limits request bodies; at least MinRequestBytes.
+	MaxRequestBytes int64
+
+	// Managed says which DynSec objects the service may change (design 6.4).
+	Managed Managed
+
 	// MQTT holds the connection to the Dynamic Security Control API.
 	MQTT MQTT
+}
+
+// Managed holds the marks of managed objects. They are configurable so that
+// the interface is not tied to TasmoFleet (design 6.4).
+type Managed struct {
+	RolePrefix   string // e.g. tf_
+	GroupPrefix  string // e.g. tf_
+	ClientMarker string // textdescription of managed clients, e.g. "managed-by: pmss"
 }
 
 // MQTT is the connection to the broker (design sections 5.2, 7.2).
@@ -87,6 +110,12 @@ func Default() Config {
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		MaxRequestBytes:   MinRequestBytes,
+		Managed: Managed{
+			RolePrefix:   "tf_",
+			GroupPrefix:  "tf_",
+			ClientMarker: "managed-by: pmss",
+		},
 		MQTT: MQTT{
 			BrokerURL:      &url.URL{Scheme: "mqtts", Host: "mosquitto:8884"},
 			CAFile:         "/run/mqtt-server-ca/ca.crt",
@@ -170,9 +199,35 @@ func Load(getenv func(string) string) (Config, error) {
 		{EnvMQTTCertFile, &cfg.MQTT.CertFile},
 		{EnvMQTTKeyFile, &cfg.MQTT.KeyFile},
 		{EnvMQTTClientID, &cfg.MQTT.ClientID},
+		{EnvRolePrefix, &cfg.Managed.RolePrefix},
+		{EnvGroupPrefix, &cfg.Managed.GroupPrefix},
+		{EnvClientMarker, &cfg.Managed.ClientMarker},
 	} {
 		if v := get(s.env); v != "" {
 			*s.dst = v
+		}
+	}
+
+	if v := get(EnvMaxRequestBytes); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		switch {
+		case err != nil:
+			errs = append(errs, fmt.Errorf("%s: not a number of bytes: %q", EnvMaxRequestBytes, v))
+		case n < MinRequestBytes:
+			errs = append(errs, fmt.Errorf("%s: at least %d (1 MiB), got %d", EnvMaxRequestBytes, MinRequestBytes, n))
+		default:
+			cfg.MaxRequestBytes = n
+		}
+	}
+	// A prefix must not reach into the reserved names (pmss-*,
+	// role_security_manager), or admin objects would count as managed.
+	for _, p := range []struct{ env, val string }{
+		{EnvRolePrefix, cfg.Managed.RolePrefix},
+		{EnvGroupPrefix, cfg.Managed.GroupPrefix},
+	} {
+		if strings.HasPrefix(p.val, "pmss-") || strings.HasPrefix("pmss-", p.val) ||
+			strings.HasPrefix("role_security_manager", p.val) {
+			errs = append(errs, fmt.Errorf("%s: %q overlaps the reserved names pmss-* and role_security_manager", p.env, p.val))
 		}
 	}
 
