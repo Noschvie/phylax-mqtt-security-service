@@ -2,7 +2,7 @@
 
 A REST API service for managing Mosquitto Dynamic Security clients, roles and access control.
 
-**Status:** under development. In place: service skeleton (configuration, structured logging, health check, graceful shutdown, container image, CI) and the connection to the Dynamic Security Control API (mTLS, MQTT 5, correlation of responses, reconnect). The endpoints of the interface specification "MQTT Security Service API v1" follow.
+**Status:** under development. In place: service skeleton (configuration, structured logging, health check, graceful shutdown, container image, CI) the connection to the Dynamic Security Control API (mTLS, MQTT 5, correlation of responses, reconnect) and the reading endpoints of the interface specification "MQTT Security Service API v1". The token check (Keycloak) and the changing endpoints follow. **Until the token check is in place, every `/api/v1` request is refused with `401`.**
 
 So far this repository contains:
 
@@ -22,6 +22,9 @@ Broker-side tests (Mosquitto 2.1.2 with Dynamic Security) live in [mqtt-acl-veri
 | `internal/api/` | HTTP server, routes, access log |
 | `internal/mqttclient/` | MQTT 5 connection to the admin listener (`autopaho`, mTLS, subscription in `OnConnectionUp`) |
 | `internal/dynsec/` | DynSec commands, `correlationData`, timeouts, error kinds |
+| `internal/model/` | API objects from DynSec data: defaults, sorting, ETag, managed flag, `authType` |
+| `internal/problem/` | Error responses (`problem+json`, codes in [docs/errors.md](docs/errors.md)) |
+| `internal/testbroker/` | Helpers for the integration tests |
 | `test/` | Integration tests and probes (separate Go modules) |
 
 ## Build and run
@@ -72,6 +75,10 @@ All settings are environment variables with defaults. Invalid values stop the se
 | `PMSS_MQTT_KEY_FILE` | `/run/secrets/mqtt-client/pmss-admin.key` | Key of the client certificate |
 | `PMSS_MQTT_CLIENT_ID` | `pmss-` + random hex | MQTT client ID |
 | `PMSS_MQTT_KEEPALIVE` | `30s` | MQTT keep alive, whole seconds |
+| `PMSS_ROLE_PREFIX` | `tf_` | Prefix of managed roles |
+| `PMSS_GROUP_PREFIX` | `tf_` | Prefix of managed groups |
+| `PMSS_CLIENT_MARKER` | `managed-by: pmss` | `textdescription` of managed clients |
+| `PMSS_MAX_REQUEST_BYTES` | `1048576` | Largest request body, at least 1 MiB |
 | `PMSS_DYNSEC_TIMEOUT` | `5s` | Limit per DynSec command (waiting for the connection, publish, response); shorter than `PMSS_HTTP_WRITE_TIMEOUT` |
 
 Durations use Go syntax (`500ms`, `15s`, `1m`) and must be greater than 0. The service does not start if the CA or the client certificate cannot be loaded.
@@ -88,9 +95,21 @@ Decision A-9 of the design (section 7.2):
 
 ## Endpoints
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/healthz` | Container health check; no token, no version in the path, no sensitive information |
+| Method | Path | Scope | Purpose |
+|---|---|---|---|
+| `GET` | `/healthz` | – | Container health check; no token, no version in the path, no sensitive information |
+| `GET` | `/api/v1/info` | `read` | API version, implementation and broker version, prefixes, marker, password policy, reserved names, limits |
+| `GET` | `/api/v1/export` | `read` | All managed clients, groups and roles, sorted, with `etag` per object |
+| `GET` | `/api/v1/clients/{username}` | `read` | One client with `ETag`; also unmanaged ones (`"managed": false`) |
+| `GET` | `/api/v1/groups/{group}` | `read` | One group with `ETag` |
+| `GET` | `/api/v1/roles/{role}` | `read` | One role with ACLs and `ETag` |
+| `GET` | `/api/v1/clients`, `/api/v1/groups`, `/api/v1/roles` | `read` | All objects with `managed` (not in the specification) |
+
+Path parameters are URL-encoded: `CN=homeassistant,O=mqtt-apps` → `CN%3Dhomeassistant%2CO%3Dmqtt-apps`. Errors are `application/problem+json`, see [docs/errors.md](docs/errors.md).
+
+**ETag** (specification 3.2): SHA-256 over the fields the object owns, lists sorted – client: `username`, `textname`, `textdescription`, `disabled`, `roles`; group: `groupname`, `textname`, `roles`, `clients`; role: `rolename`, `textname`, `acls`. Group membership belongs to the group, so adding a client to a group changes only the group ETag; a password change changes no ETag.
+
+**Export** (specification 4.2): three lists read one after the other (DynSec has no snapshot); objects sorted by name, assignments by name, ACLs by `acltype` and `topic` (Unicode code points). Two exports of the same state are byte-identical apart from `exportedAt`.
 
 ## Logging
 
