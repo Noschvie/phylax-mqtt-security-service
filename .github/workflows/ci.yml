@@ -60,6 +60,7 @@ jobs:
       - name: Integration tests
         env:
           PMSS_TEST_BROKER_URL: mqtts://127.0.0.1:18884
+          PMSS_TEST_BROKER_PLAIN: 127.0.0.1:18883
         run: |
           PMSS_TEST_BROKER_CERTS=$PWD/run/certs \
             go test -race -count=1 -v -run Integration ../../../internal/...
