@@ -239,33 +239,41 @@ func TestKeyRotationAndThrottle(t *testing.T) {
 	is := newIssuer(t)
 	k1 := rsaKey(t, "k1")
 	is.publish(k1)
-	v := newTestVerifier(t, is, VerifierConfig{MinRefreshInterval: 200 * time.Millisecond})
+	v := newTestVerifier(t, is, VerifierConfig{MinRefreshInterval: time.Hour})
 	ctx := context.Background()
 	if _, err := v.Verify(ctx, sign(t, k1, is.claims(nil))); err != nil {
 		t.Fatal(err)
 	}
 
-	// Forged tokens with unknown kids: at most one fetch per interval.
+	// Forged tokens with unknown kids within the interval: no fetch.
 	forged := rsaKey(t, "unknown")
 	for range 10 {
 		if _, err := v.Verify(ctx, sign(t, forged, is.claims(nil))); err == nil {
 			t.Fatal("unknown kid accepted")
 		}
 	}
-	if n := v.Keys.Fetches(); n != 2 {
-		t.Errorf("%d JWKS fetches for 10 unknown kids, want 2 (start + one refresh)", n)
+	if n := v.Keys.Fetches(); n != 1 {
+		t.Errorf("%d JWKS fetches, want 1: unknown kids within the interval must not fetch", n)
 	}
 
-	// Rotation: a new key is taken over once the interval has passed.
+	// Rotation: once the interval has passed, a new kid causes one fetch.
 	k2 := rsaKey(t, "k2")
 	is.publish(k2)
-	time.Sleep(250 * time.Millisecond)
+	v.Keys.mu.Lock()
+	v.Keys.next = time.Now() // the interval has passed
+	v.Keys.mu.Unlock()
 	if _, err := v.Verify(ctx, sign(t, k2, is.claims(nil))); err != nil {
 		t.Errorf("rotated key: %v", err)
 	}
-	// Known keys never wait for a fetch.
+	if n := v.Keys.Fetches(); n != 2 {
+		t.Errorf("%d JWKS fetches after rotation, want 2", n)
+	}
+	// Known keys never fetch.
 	if _, err := v.Verify(ctx, sign(t, k1, is.claims(nil))); err != nil {
 		t.Errorf("old key: %v", err)
+	}
+	if n := v.Keys.Fetches(); n != 2 {
+		t.Errorf("%d JWKS fetches, want still 2", n)
 	}
 }
 
