@@ -28,6 +28,8 @@ import (
 
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/api"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/dynsec"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/mqttclient"
 )
 
 // version is set at build time: -ldflags "-X main.version=v1.2.3".
@@ -81,11 +83,50 @@ func serve(getenv func(string) string, stdout io.Writer) int {
 	}
 	logger := slog.New(slog.NewJSONHandler(stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
 
+	// Certificates are loaded once; every error stops the start (design 5.2).
+	tlsCfg, identity, err := mqttclient.LoadTLS(cfg.MQTT.CAFile, cfg.MQTT.CertFile, cfg.MQTT.KeyFile, cfg.MQTT.TLSServerName())
+	if err != nil {
+		logger.Error("invalid broker TLS configuration", "error", err)
+		return 1
+	}
+	logger.Info("admin identity loaded", "cn", identity.CommonName, "not_after", identity.NotAfter.UTC().Format(time.RFC3339))
+	if time.Until(identity.NotAfter) < 0 {
+		logger.Error("admin certificate has expired; the broker will refuse the connection", "cn", identity.CommonName)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// The broker connection runs in the background and reconnects by
+	// itself; the HTTP server starts without waiting for it.
+	conn := mqttclient.New(mqttclient.Options{
+		BrokerURL:     cfg.MQTT.BrokerURL,
+		TLS:           tlsCfg,
+		ClientID:      cfg.MQTT.ClientID,
+		KeepAlive:     cfg.MQTT.KeepAlive,
+		ResponseTopic: dynsec.ResponseTopic,
+		Logger:        logger.With("component", "mqtt"),
+	})
+	// dyn is handed to the API endpoints in the next step.
+	dyn := dynsec.NewClient(conn, cfg.MQTT.CommandTimeout, logger.With("component", "dynsec"))
+	connCtx, cancelConn := context.WithCancel(context.Background())
+	defer cancelConn()
+	if err := conn.Start(connCtx, dyn.HandleMessage); err != nil {
+		logger.Error("broker connection", "error", err)
+		return 1
+	}
+
 	srv := api.NewServer(cfg, api.NewHandler(logger), logger)
-	if err := runServer(ctx, srv, cfg.ShutdownTimeout, logger); err != nil {
+	err = runServer(ctx, srv, cfg.ShutdownTimeout, logger)
+
+	// Disconnect from the broker after the last request.
+	closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
+	if cerr := conn.Close(closeCtx); cerr != nil {
+		logger.Warn("broker disconnect", "error", cerr)
+	}
+	cancelClose()
+
+	if err != nil {
 		logger.Error("server stopped with error", "error", err)
 		return 1
 	}

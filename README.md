@@ -2,11 +2,12 @@
 
 A REST API service for managing Mosquitto Dynamic Security clients, roles and access control.
 
-**Status:** under development. The service skeleton is in place (configuration, structured logging, health check, graceful shutdown, container image, CI). The Dynamic Security connection and the endpoints of the interface specification "MQTT Security Service API v1" follow.
+**Status:** under development. In place: service skeleton (configuration, structured logging, health check, graceful shutdown, container image, CI) and the connection to the Dynamic Security Control API (mTLS, MQTT 5, correlation of responses, reconnect). The endpoints of the interface specification "MQTT Security Service API v1" follow.
 
 So far this repository contains:
 
-- The service skeleton (`cmd/`, `internal/`).
+- The service (`cmd/`, `internal/`).
+- [Broker integration test](test/integration/broker/README.md) – the broker connection against Mosquitto 2.1.2 with Dynamic Security.
 - [Keycloak integration test](test/integration/keycloak/README.md) – checks scopes, audience, the role mapping of scope `write` and Standard Token Exchange against Keycloak 26.8.2.
 - [JWT probe](test/probes/jwt-go-oidc/README.md) – token verification with `coreos/go-oidc/v3`, template for `internal/auth`.
 
@@ -19,6 +20,8 @@ Broker-side tests (Mosquitto 2.1.2 with Dynamic Security) live in [mqtt-acl-veri
 | `cmd/phylax-mqtt-security-service/` | `main`: commands, start, graceful shutdown |
 | `internal/config/` | Configuration from environment variables |
 | `internal/api/` | HTTP server, routes, access log |
+| `internal/mqttclient/` | MQTT 5 connection to the admin listener (`autopaho`, mTLS, subscription in `OnConnectionUp`) |
+| `internal/dynsec/` | DynSec commands, `correlationData`, timeouts, error kinds |
 | `test/` | Integration tests and probes (separate Go modules) |
 
 ## Build and run
@@ -62,8 +65,26 @@ All settings are environment variables with defaults. Invalid values stop the se
 | `PMSS_HTTP_READ_TIMEOUT` | `15s` | `http.Server.ReadTimeout` |
 | `PMSS_HTTP_WRITE_TIMEOUT` | `30s` | `http.Server.WriteTimeout` |
 | `PMSS_HTTP_IDLE_TIMEOUT` | `60s` | `http.Server.IdleTimeout` |
+| `PMSS_MQTT_BROKER_URL` | `mqtts://mosquitto:8884` | Admin listener of the broker; only `mqtts` |
+| `PMSS_MQTT_SERVER_NAME` | host of the URL | Name checked against the SAN of the broker certificate |
+| `PMSS_MQTT_CA_FILE` | `/run/mqtt-server-ca/ca.crt` | Server CA; the only CA trusted for the broker |
+| `PMSS_MQTT_CERT_FILE` | `/run/secrets/mqtt-client/pmss-admin.crt` | Client certificate of the admin CA; its CN is the DynSec user |
+| `PMSS_MQTT_KEY_FILE` | `/run/secrets/mqtt-client/pmss-admin.key` | Key of the client certificate |
+| `PMSS_MQTT_CLIENT_ID` | `pmss-` + random hex | MQTT client ID |
+| `PMSS_MQTT_KEEPALIVE` | `30s` | MQTT keep alive, whole seconds |
+| `PMSS_DYNSEC_TIMEOUT` | `5s` | Limit per DynSec command (waiting for the connection, publish, response); shorter than `PMSS_HTTP_WRITE_TIMEOUT` |
 
-Durations use Go syntax (`500ms`, `15s`, `1m`) and must be greater than 0.
+Durations use Go syntax (`500ms`, `15s`, `1m`) and must be greater than 0. The service does not start if the CA or the client certificate cannot be loaded.
+
+## Broker connection
+
+Decision A-9 of the design (section 7.2):
+
+- Clean session, session expiry 0: DynSec commands are not idempotent, so an unacknowledged command must never be resent after a reconnect.
+- The response topic `$CONTROL/dynamic-security/v1/response` is subscribed on every connection; commands are sent only after the subscription is acknowledged.
+- Every command carries its own `correlationData` (UUID string). Responses for other subscribers (e.g. `mosquitto_ctrl` of the break-glass admin) are dropped.
+- Without a connection a command waits at most `PMSS_DYNSEC_TIMEOUT` and fails as *unavailable*; it is not sent later. Without a response in time it fails as *timeout*: the command may have been executed.
+- The HTTP server starts without waiting for the broker; the connection is retried in the background (0, 1s, 2s … 30s).
 
 ## Endpoints
 
