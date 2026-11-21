@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/api"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/auth"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
 )
 
@@ -148,5 +149,26 @@ func TestParseBrokerVersion(t *testing.T) {
 		if got := parseBrokerVersion(in); got != want {
 			t.Errorf("%q: got %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestNewAuthorizer(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	cfg := config.Default().OIDC
+	a, err := newAuthorizer(cfg, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := a.(auth.DenyAll); !ok {
+		t.Errorf("without issuer: %T, want auth.DenyAll", a)
+	}
+	cfg.Issuer = "https://kc.example.org/realms/pmss"
+	a, err = newAuthorizer(cfg, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, ok := a.(*auth.Bearer)
+	if !ok || b.ScopeNames[auth.ScopeRead] != "read" || b.ScopeNames[auth.ScopeWrite] != "write" {
+		t.Errorf("with issuer: %T %+v", a, a)
 	}
 }

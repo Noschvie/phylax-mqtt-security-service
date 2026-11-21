@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/api"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/auth"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/dynsec"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/mqttclient"
@@ -128,16 +129,18 @@ func serve(getenv func(string) string, stdout io.Writer) int {
 		return 1
 	}
 
-	// The token check (Keycloak) follows; until then every /api/v1
-	// request is refused with 401.
-	logger.Warn("token verification not configured; all /api/v1 requests are refused")
+	authorizer, err := newAuthorizer(cfg.OIDC, logger)
+	if err != nil {
+		logger.Error("invalid token check configuration", "error", err)
+		return 1
+	}
 	handler := api.NewHandler(api.Options{
 		Logger:          logger,
 		Version:         version,
 		Managed:         cfg.Managed,
 		MaxRequestBytes: cfg.MaxRequestBytes,
 		DynSec:          dyn,
-		Auth:            api.DenyAll{},
+		Auth:            authorizer,
 		BrokerVersion:   func() string { return brokerVersion.Load().(string) },
 	})
 	srv := api.NewServer(cfg, handler, logger)
@@ -186,6 +189,34 @@ func runServer(ctx context.Context, srv *http.Server, timeout time.Duration, log
 	}
 	logger.Info("service stopped")
 	return nil
+}
+
+// newAuthorizer returns the token check for Keycloak access tokens, or
+// DenyAll without an issuer: the API is closed unless configured.
+func newAuthorizer(cfg config.OIDC, logger *slog.Logger) (auth.Authorizer, error) {
+	if cfg.Issuer == "" {
+		logger.Warn("PMSS_OIDC_ISSUER not set; all /api/v1 requests are refused")
+		return auth.DenyAll{}, nil
+	}
+	if cfg.AllowHTTP {
+		logger.Warn("PMSS_OIDC_ALLOW_HTTP is set; token keys may be fetched over plain HTTP (test setups only)")
+	}
+	v, err := auth.NewVerifier(auth.VerifierConfig{
+		Issuer:             cfg.Issuer,
+		Audience:           cfg.Audience,
+		JWKSURL:            cfg.JWKSURL,
+		MinRefreshInterval: cfg.JWKSMinRefresh,
+	})
+	if err != nil {
+		return nil, err
+	}
+	logger.Info("token check configured", "issuer", cfg.Issuer, "audience", cfg.Audience,
+		"scope_read", cfg.ScopeRead, "scope_write", cfg.ScopeWrite)
+	return &auth.Bearer{
+		Verifier:   v,
+		ScopeNames: map[auth.Scope]string{auth.ScopeRead: cfg.ScopeRead, auth.ScopeWrite: cfg.ScopeWrite},
+		Logger:     logger.With("component", "auth"),
+	}, nil
 }
 
 // brokerVersionTopic is retained by Mosquitto, e.g. "mosquitto version 2.1.2";
