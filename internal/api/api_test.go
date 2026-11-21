@@ -19,7 +19,7 @@ func discard() *slog.Logger { return slog.New(slog.NewJSONHandler(io.Discard, ni
 
 func TestHealthz(t *testing.T) {
 	rec := httptest.NewRecorder()
-	NewHandler(discard()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	NewHandler(Options{Logger: discard()}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d, want 200", rec.Code)
@@ -40,7 +40,7 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestRouting(t *testing.T) {
-	h := NewHandler(discard())
+	h := NewHandler(Options{Logger: discard()})
 	for _, tc := range []struct {
 		method, path string
 		want         int
@@ -49,6 +49,8 @@ func TestRouting(t *testing.T) {
 		{http.MethodPost, "/healthz", http.StatusMethodNotAllowed},
 		{http.MethodGet, "/", http.StatusNotFound},
 		{http.MethodGet, "/api/v1/healthz", http.StatusNotFound},
+		{http.MethodGet, "/api/export", http.StatusNotFound}, // old path without version
+		{http.MethodDelete, "/api/v1/export", http.StatusMethodNotAllowed},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
@@ -61,7 +63,7 @@ func TestRouting(t *testing.T) {
 func TestAccessLog(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	h := NewHandler(logger)
+	h := NewHandler(Options{Logger: logger})
 
 	req := httptest.NewRequest(http.MethodGet, "/missing", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")

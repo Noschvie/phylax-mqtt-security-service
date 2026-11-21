@@ -63,7 +63,7 @@ func TestRunInvalidConfig(t *testing.T) {
 }
 
 func TestHealthcheck(t *testing.T) {
-	ok := httptest.NewServer(api.NewHandler(slog.New(slog.NewJSONHandler(io.Discard, nil))))
+	ok := httptest.NewServer(api.NewHandler(api.Options{Logger: slog.New(slog.NewJSONHandler(io.Discard, nil))}))
 	defer ok.Close()
 	if err := healthcheck(ok.URL+"/healthz", time.Second); err != nil {
 		t.Errorf("healthy service: %v", err)
@@ -135,5 +135,18 @@ func TestRunServerGracefulShutdown(t *testing.T) {
 	}
 	if err := <-done; err != nil {
 		t.Errorf("runServer: %v", err)
+	}
+}
+
+func TestParseBrokerVersion(t *testing.T) {
+	for in, want := range map[string]string{
+		"mosquitto version 2.1.2":    "2.1.2",
+		"mosquitto version 2.0.18\n": "2.0.18",
+		"2.1.2":                      "2.1.2",
+		"":                           "",
+	} {
+		if got := parseBrokerVersion(in); got != want {
+			t.Errorf("%q: got %q, want %q", in, got, want)
+		}
 	}
 }
