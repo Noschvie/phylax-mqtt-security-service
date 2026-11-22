@@ -2,7 +2,7 @@
 
 A REST API service for managing Mosquitto Dynamic Security clients, roles and access control.
 
-**Status:** under development. In place: service skeleton (configuration, structured logging, health check, graceful shutdown, container image, CI) the connection to the Dynamic Security Control API (mTLS, MQTT 5, correlation of responses, reconnect) and the reading endpoints of the interface specification "MQTT Security Service API v1" with the token check for Keycloak access tokens. The changing endpoints follow. **Without `PMSS_OIDC_ISSUER` every `/api/v1` request is refused with `401`.**
+**Status:** under development. In place: service skeleton (configuration, structured logging, health check, graceful shutdown, container image, CI) the connection to the Dynamic Security Control API (mTLS, MQTT 5, correlation of responses, reconnect) and the endpoints of the interface specification "MQTT Security Service API v1" with the token check for Keycloak access tokens and the audit log. **Without `PMSS_OIDC_ISSUER` every `/api/v1` request is refused with `401`.**
 
 So far this repository contains:
 
@@ -23,6 +23,8 @@ Broker-side tests (Mosquitto 2.1.2 with Dynamic Security) live in [mqtt-acl-veri
 | `internal/mqttclient/` | MQTT 5 connection to the admin listener (`autopaho`, mTLS, subscription in `OnConnectionUp`) |
 | `internal/dynsec/` | DynSec commands, `correlationData`, timeouts, error kinds |
 | `internal/auth/` | Token check: go-oidc plus `typ` and scopes, throttled JWKS key set, caller for the audit |
+| `internal/rules/` | Checks of the write endpoints: names, passwords, ACLs, topic filters, deny warnings |
+| `internal/audit/` | Audit records (`"log_type":"audit"`) with caller, before and after |
 | `internal/model/` | API objects from DynSec data: defaults, sorting, ETag, managed flag, `authType` |
 | `internal/problem/` | Error responses (`problem+json`, codes in [docs/errors.md](docs/errors.md)) |
 | `internal/testbroker/` | Helpers for the integration tests |
@@ -121,6 +123,29 @@ Every `/api/v1` request needs `Authorization: Bearer <access token>` from Keyclo
 | `GET` | `/api/v1/groups/{group}` | `read` | One group with `ETag` |
 | `GET` | `/api/v1/roles/{role}` | `read` | One role with ACLs and `ETag` |
 | `GET` | `/api/v1/clients`, `/api/v1/groups`, `/api/v1/roles` | `read` | All objects with `managed` (not in the specification) |
+| `POST` | `/api/v1/clients` | `write` | Create a client with roles and groups; password generated or given |
+| `POST` | `/api/v1/clients/{username}/password` | `write` | New password, generated or given |
+| `DELETE` | `/api/v1/clients/{username}` | `write` | Delete (also: lock) a client |
+| `POST`, `DELETE` | `/api/v1/clients/{username}/roles[/{role}]` | `write` | Assign or remove a role |
+| `POST`, `DELETE` | `/api/v1/groups`, `/api/v1/groups/{group}` | `write` | Create or delete a group |
+| `POST`, `DELETE` | `/api/v1/groups/{group}/clients[/{username}]` | `write` | Add or remove a client |
+| `POST`, `DELETE` | `/api/v1/groups/{group}/roles[/{role}]` | `write` | Assign or remove a role |
+| `POST`, `DELETE` | `/api/v1/roles`, `/api/v1/roles/{role}` | `write` | Create a role with ACLs, delete a role |
+| `PUT` | `/api/v1/roles/{role}/acls` | `write` | Replace the whole ACL list |
+
+### Changes
+
+Every changing request runs the same steps (specification 3.2, 3.7, 4.3–4.8; design A-5, A-8, A-9):
+
+1. Names: `pmss-*` and `role_security_manager` → `403 reserved_name`; objects without prefix or marker → `403 not_managed`; invalid fields → `422` with JSON Pointers. Nothing is sent to the broker before all checks pass.
+2. Existing objects need `If-Match` with the current `ETag` (`428` if missing, `412` if changed in the meantime, e.g. by `mosquitto_ctrl`).
+3. One DynSec command. Without an answer the service reads the object back: target state reached → success, otherwise `504 broker_timeout` (state unknown). Commands are never resent. A password change cannot be read back and always ends with `504` then.
+4. The object is read back for the response and the new `ETag`. `createRole` and `PUT …/acls` compare the stored ACLs with the request (`500 readback_mismatch`; a new role is deleted again).
+5. One audit record with caller, action, object, result (`success`, `failed`, `unknown`, `partial`) and the object before and after – never passwords or tokens.
+
+Passwords: exactly 24 characters `A–Z a–z 0–9`; generated with `crypto/rand` and returned once (`Cache-Control: no-store`); a given password is never returned. Certificate clients (`CN=…`) have no password. ACLs: `acltype` from the fixed list, `topic` a valid filter, `allow` required, `priority` −100000…100000; a deny rule without higher priority than an overlapping allow rule of the same type gives the warning `deny_priority_not_higher`.
+
+Not yet implemented from the PMSS endpoint list (not used by TasmoFleet): `PATCH` of the textname, `enable`/`disable` (open point: refuse or remove the roles for certificate clients) and single ACLs per `POST`/`DELETE`.
 
 Path parameters are URL-encoded: `CN=homeassistant,O=mqtt-apps` → `CN%3Dhomeassistant%2CO%3Dmqtt-apps`. Errors are `application/problem+json`, see [docs/errors.md](docs/errors.md).
 

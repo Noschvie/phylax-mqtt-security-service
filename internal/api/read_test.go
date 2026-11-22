@@ -106,7 +106,7 @@ func do(t *testing.T, h http.Handler, method, path string) *httptest.ResponseRec
 	return rec
 }
 
-func decodeBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
+func jsonBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var m map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
@@ -123,7 +123,7 @@ func checkProblem(t *testing.T, rec *httptest.ResponseRecorder, status int, code
 	if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
 		t.Errorf("Content-Type %q", ct)
 	}
-	b := decodeBody(t, rec)
+	b := jsonBody(t, rec)
 	if b["code"] != string(code) || b["status"] != float64(status) {
 		t.Errorf("problem %v, want %s/%d", b, code, status)
 	}
@@ -223,7 +223,7 @@ func TestGetSingleObjects(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
-	b := decodeBody(t, rec)
+	b := jsonBody(t, rec)
 	if b["username"] != "CN=homeassistant,O=mqtt-apps" || b["managed"] != true || b["authType"] != "certificate" {
 		t.Errorf("client %v", b)
 	}
@@ -232,16 +232,16 @@ func TestGetSingleObjects(t *testing.T) {
 	}
 
 	rec = do(t, h, http.MethodGet, "/api/v1/clients/legacy-shared-user")
-	if b := decodeBody(t, rec); rec.Code != 200 || b["managed"] != false {
+	if b := jsonBody(t, rec); rec.Code != 200 || b["managed"] != false {
 		t.Errorf("unmanaged client: %d %v", rec.Code, b)
 	}
 
 	rec = do(t, h, http.MethodGet, "/api/v1/groups/tf_group_tasmota")
-	if b := decodeBody(t, rec); rec.Code != 200 || b["managed"] != true || rec.Header().Get("ETag") == "" {
+	if b := jsonBody(t, rec); rec.Code != 200 || b["managed"] != true || rec.Header().Get("ETag") == "" {
 		t.Errorf("group: %d %v", rec.Code, b)
 	}
 	rec = do(t, h, http.MethodGet, "/api/v1/roles/tf_role_homeassistant")
-	if b := decodeBody(t, rec); rec.Code != 200 || b["managed"] != true || !strings.HasPrefix(rec.Header().Get("ETag"), `"r-`) {
+	if b := jsonBody(t, rec); rec.Code != 200 || b["managed"] != true || !strings.HasPrefix(rec.Header().Get("ETag"), `"r-`) {
 		t.Errorf("role: %d %v", rec.Code, b)
 	}
 

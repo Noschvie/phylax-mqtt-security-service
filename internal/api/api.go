@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/audit"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/auth"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/dynsec"
@@ -53,6 +54,7 @@ type server struct {
 	opts   Options
 	marks  model.Marks
 	routes *http.ServeMux
+	audit  *audit.Logger
 }
 
 // NewHandler returns all routes, wrapped in access log and body limit.
@@ -73,7 +75,7 @@ func NewHandler(opts Options) http.Handler {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	s := &server{opts: opts, marks: model.Marks(opts.Managed), routes: http.NewServeMux()}
+	s := &server{opts: opts, marks: model.Marks(opts.Managed), routes: http.NewServeMux(), audit: audit.New(opts.Logger)}
 
 	// Container health check: internal, no token, no version in the path,
 	// no sensitive information (design 7.3, S-9).
@@ -90,6 +92,24 @@ func NewHandler(opts Options) http.Handler {
 	read("GET /api/v1/groups/{group}", s.handleGetGroup)
 	read("GET /api/v1/roles", s.handleListRoles)
 	read("GET /api/v1/roles/{role}", s.handleGetRole)
+
+	write := func(pattern string, h http.HandlerFunc) {
+		s.routes.Handle(pattern, s.require(auth.ScopeWrite, h))
+	}
+	write("POST /api/v1/clients", s.handleCreateClient)
+	write("DELETE /api/v1/clients/{username}", s.handleDeleteClient)
+	write("POST /api/v1/clients/{username}/password", s.handleSetPassword)
+	write("POST /api/v1/clients/{username}/roles", s.handleAddClientRole)
+	write("DELETE /api/v1/clients/{username}/roles/{role}", s.handleRemoveClientRole)
+	write("POST /api/v1/groups", s.handleCreateGroup)
+	write("DELETE /api/v1/groups/{group}", s.handleDeleteGroup)
+	write("POST /api/v1/groups/{group}/clients", s.handleAddGroupClient)
+	write("DELETE /api/v1/groups/{group}/clients/{username}", s.handleRemoveGroupClient)
+	write("POST /api/v1/groups/{group}/roles", s.handleAddGroupRole)
+	write("DELETE /api/v1/groups/{group}/roles/{role}", s.handleRemoveGroupRole)
+	write("POST /api/v1/roles", s.handleCreateRole)
+	write("DELETE /api/v1/roles/{role}", s.handleDeleteRole)
+	write("PUT /api/v1/roles/{role}/acls", s.handleReplaceACLs)
 
 	return accessLog(opts.Logger, s.limitBody(http.HandlerFunc(s.route)))
 }
