@@ -18,7 +18,9 @@ python3 check_tokens.py
 docker compose down -v
 ```
 
-Expected: 10 × `PASS`, exit code 0. CI runs the same steps (`.github/workflows/keycloak-integration.yml`).
+Expected: 10 × `PASS`, exit code 0. CI runs the same check in the combined environment ([../README.md](../README.md), `.github/workflows/integration.yml`).
+
+`KC_HOSTNAME` fixes the issuer to `http://127.0.0.1:8180/realms/pmss-test`, whatever host name a request uses. Tests on the host get their tokens via `127.0.0.1:8180`; the service in the compose network fetches the JWKS via `keycloak:8080`.
 
 ## Test realm
 
