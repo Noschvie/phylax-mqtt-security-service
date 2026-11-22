@@ -7,10 +7,15 @@ name: Integration
 # whole path token → REST → MQTT/mTLS → DynSec.
 
 on:
-  push:
-    branches: [main]
   pull_request:
+  # main, tags and the weekly rebuild run this workflow from release.yml
+  # before the image is pushed.
   workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to test (default: the ref of the caller)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -28,6 +33,8 @@ jobs:
       PMSS_TEST_E2E_URL: http://127.0.0.1:18080
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
