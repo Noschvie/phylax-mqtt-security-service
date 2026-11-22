@@ -150,7 +150,13 @@ jobs:
         run: |
           docker buildx imagetools inspect "$IMAGE@$DIGEST"
           for p in linux/amd64 linux/arm64; do
-            docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{json .Manifest}}' | grep -q "\"architecture\":\"${p#linux/}\""
+            arch="${p#linux/}"
+
+            docker buildx imagetools inspect "$IMAGE@$DIGEST" \
+              --format '{{json .Manifest}}' |
+              jq -e --arg arch "$arch" \
+                'any(.manifests[]; .platform.os == "linux" and .platform.architecture == $arch)' \
+                > /dev/null
           done
           v=$(docker run --rm --platform linux/amd64 "$IMAGE@$DIGEST" version)
           echo "$v"
