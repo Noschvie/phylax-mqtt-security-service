@@ -253,6 +253,43 @@ func (f *fakeBroker) apply(cmd dynsec.Command) (json.RawMessage, error) {
 			return nil, cmdErr(cmd, "Role not found")
 		}
 		r.ACLs = f.filterACLs(c.ACLs)
+	case dynsec.ModifyClient:
+		cl, ok := f.clients[c.Username]
+		if !ok {
+			return nil, cmdErr(cmd, "Client not found")
+		}
+		cl.Textname = c.Textname
+	case dynsec.EnableClient:
+		cl, ok := f.clients[c.Username]
+		if !ok {
+			return nil, cmdErr(cmd, "Client not found")
+		}
+		cl.Disabled = false
+	case dynsec.DisableClient:
+		cl, ok := f.clients[c.Username]
+		if !ok {
+			return nil, cmdErr(cmd, "Client not found")
+		}
+		cl.Disabled = true
+	case dynsec.AddRoleACL:
+		r, ok := f.roles[c.Rolename]
+		if !ok {
+			return nil, cmdErr(cmd, "Role not found")
+		}
+		if slices.ContainsFunc(r.ACLs, func(a dynsec.ACL) bool { return a.ACLType == c.ACLType && a.Topic == c.Topic }) {
+			return nil, cmdErr(cmd, "ACL with this topic already exists")
+		}
+		r.ACLs = append(r.ACLs, f.filterACLs([]dynsec.ACL{{ACLType: c.ACLType, Topic: c.Topic, Priority: c.Priority, Allow: c.Allow}})...)
+	case dynsec.RemoveRoleACL:
+		r, ok := f.roles[c.Rolename]
+		if !ok {
+			return nil, cmdErr(cmd, "Role not found")
+		}
+		n := len(r.ACLs)
+		r.ACLs = slices.DeleteFunc(r.ACLs, func(a dynsec.ACL) bool { return a.ACLType == c.ACLType && a.Topic == c.Topic })
+		if len(r.ACLs) == n {
+			return nil, cmdErr(cmd, "ACL not found")
+		}
 	default:
 		return nil, cmdErr(cmd, "Unknown command")
 	}
