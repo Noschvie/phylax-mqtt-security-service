@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -238,4 +239,83 @@ func subscribeCodes(t *testing.T, addr, user, password string, topics []string) 
 		t.Fatalf("subscribe: %v", err)
 	}
 	return sa.Reasons
+}
+
+// PMSS extras (design 7.3) against the real broker.
+func TestIntegrationWriteExtras(t *testing.T) {
+	b := tb.FromEnv(t)
+	var version atomic.Value
+	_, c := tb.Connect(t, b, tb.Options{
+		Cert: "pmss-admin", WaitReady: true, ExtraTopics: []string{"$SYS/broker/version"},
+		OnExtra: func(_ string, p []byte) { version.Store(string(p)) },
+	})
+	srv := newServer(t, c, &version)
+	id := tb.RandomName("")
+	dev, cert, role := "it-x-"+id, "CN=it-x-"+id+",O=mqtt-apps", "tf_role_x_"+id
+	t.Cleanup(func() {
+		for _, cmd := range []any{tb.DeleteClient{Username: dev}, tb.DeleteClient{Username: cert}, tb.DeleteRole{Rolename: role}} {
+			_, _ = c.Execute(context.Background(), cmd.(interface{ CommandName() string }))
+		}
+	})
+
+	st, h, body := send(t, srv, "POST", "/api/v1/clients", `{"username":"`+dev+`","textname":"alt"}`)
+	must(t, 201, st, body)
+	password, _ := body["password"].(string)
+
+	// PATCH textname; the marker stays.
+	st, h, body = send(t, srv, "PATCH", "/api/v1/clients/"+dev, `{"textname":"neu"}`, "If-Match", h.Get("ETag"))
+	must(t, 200, st, body)
+	if body["textname"] != "neu" || body["managed"] != true {
+		t.Errorf("patch: %v", body)
+	}
+
+	// Disable: the password client can no longer log in; enable restores it.
+	st, h, body = send(t, srv, "POST", "/api/v1/clients/"+dev+"/disable", "", "If-Match", h.Get("ETag"))
+	must(t, 200, st, body)
+	if body["disabled"] != true {
+		t.Errorf("disable: %v", body)
+	}
+	addr := os.Getenv("PMSS_TEST_BROKER_PLAIN")
+	if addr != "" {
+		if err := connectPlain(addr, dev, password); err == nil {
+			t.Error("disabled client can still log in")
+		}
+	}
+	st, _, body = send(t, srv, "POST", "/api/v1/clients/"+dev+"/enable", "", "If-Match", h.Get("ETag"))
+	must(t, 200, st, body)
+	if addr != "" {
+		if err := connectPlain(addr, dev, password); err != nil {
+			t.Errorf("enabled client refused: %v", err)
+		}
+	}
+
+	// Decision 8.8 A: certificate clients cannot be disabled.
+	st, _, body = send(t, srv, "POST", "/api/v1/clients", `{"username":"`+cert+`"}`)
+	must(t, 201, st, body)
+	certPath := "/api/v1/clients/" + url.PathEscape(cert)
+	_, h, _ = send(t, srv, "GET", certPath, "")
+	st, _, body = send(t, srv, "POST", certPath+"/disable", "", "If-Match", h.Get("ETag"))
+	must(t, 409, st, body)
+	if body["code"] != "certificate_client" {
+		t.Errorf("certificate disable: %v", body)
+	}
+
+	// Single ACLs: add, duplicate → 409, remove, missing → 404.
+	st, h, body = send(t, srv, "POST", "/api/v1/roles", `{"rolename":"`+role+`","acls":[{"acltype":"subscribePattern","topic":"cmnd/a/#","allow":true}]}`)
+	must(t, 201, st, body)
+	acl := `{"acltype":"subscribePattern","topic":"cmnd/a/secret","allow":false}`
+	st, h, body = send(t, srv, "POST", "/api/v1/roles/"+role+"/acls", acl, "If-Match", h.Get("ETag"))
+	must(t, 200, st, body)
+	if len(body["acls"].([]any)) != 2 || len(body["warnings"].([]any)) != 1 {
+		t.Errorf("add acl: %v", body)
+	}
+	st, _, body = send(t, srv, "POST", "/api/v1/roles/"+role+"/acls", acl, "If-Match", h.Get("ETag"))
+	must(t, 409, st, body)
+	st, h, body = send(t, srv, "DELETE", "/api/v1/roles/"+role+"/acls", `{"acltype":"subscribePattern","topic":"cmnd/a/secret"}`, "If-Match", h.Get("ETag"))
+	must(t, 200, st, body)
+	if len(body["acls"].([]any)) != 1 {
+		t.Errorf("remove acl: %v", body)
+	}
+	st, _, body = send(t, srv, "DELETE", "/api/v1/roles/"+role+"/acls", `{"acltype":"subscribePattern","topic":"cmnd/a/secret"}`, "If-Match", h.Get("ETag"))
+	must(t, 404, st, body)
 }
