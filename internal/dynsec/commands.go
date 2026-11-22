@@ -197,3 +197,46 @@ type ModifyRole struct {
 }
 
 func (ModifyRole) CommandName() string { return "modifyRole" }
+
+// ModifyClient with only textname leaves all other fields as they are
+// (tested with Mosquitto 2.0.18).
+type ModifyClient struct {
+	Username string `json:"username"`
+	Textname string `json:"textname"`
+}
+
+func (ModifyClient) CommandName() string { return "modifyClient" }
+
+// EnableClient and DisableClient act on password logins only; DynSec does
+// not check disabled for certificate logins (design 5.2).
+type EnableClient struct {
+	Username string `json:"username"`
+}
+
+func (EnableClient) CommandName() string { return "enableClient" }
+
+type DisableClient struct {
+	Username string `json:"username"`
+}
+
+func (DisableClient) CommandName() string { return "disableClient" }
+
+// AddRoleACL adds one ACL; allow is always sent (a missing allow is a deny
+// rule in DynSec).
+type AddRoleACL struct {
+	Rolename string `json:"rolename"`
+	ACLType  string `json:"acltype"`
+	Topic    string `json:"topic"`
+	Priority int    `json:"priority"`
+	Allow    bool   `json:"allow"`
+}
+
+func (AddRoleACL) CommandName() string { return "addRoleACL" }
+
+type RemoveRoleACL struct {
+	Rolename string `json:"rolename"`
+	ACLType  string `json:"acltype"`
+	Topic    string `json:"topic"`
+}
+
+func (RemoveRoleACL) CommandName() string { return "removeRoleACL" }
