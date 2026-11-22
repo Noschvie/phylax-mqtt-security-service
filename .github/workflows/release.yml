@@ -73,6 +73,7 @@ jobs:
           echo "Targets: [$items]"
 
   ci:
+    name: ci ${{ matrix.version }}
     needs: targets
     strategy:
       matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
@@ -81,6 +82,7 @@ jobs:
       ref: ${{ matrix.ref }}
 
   integration:
+    name: integration ${{ matrix.version }}
     needs: targets
     strategy:
       matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
@@ -89,6 +91,7 @@ jobs:
       ref: ${{ matrix.ref }}
 
   image:
+    name: image ${{ matrix.version }}
     needs: [targets, ci, integration]
     runs-on: ubuntu-latest
     permissions:
