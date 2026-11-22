@@ -51,6 +51,34 @@ docker run --rm -p 8080:8080 phylax-mqtt-security-service:dev
 
 The image is based on `debian:trixie-slim`, runs as UID/GID 10001 and has a `HEALTHCHECK` that calls the binary itself (no curl in the image).
 
+### Images and releases
+
+Production images are built only by [`.github/workflows/release.yml`](.github/workflows/release.yml) (design 7.8). First the unit tests (`ci.yml`) and the integration tests (`integration.yml`) run for exactly the commit to build. Then the workflow builds for `linux/amd64` and `linux/arm64` with fresh base images, pushes to `ghcr.io/noschvie/phylax-mqtt-security-service` and checks the pushed image (both architectures, version, UID).
+
+| Trigger | Image tags |
+|---|---|
+| Push to `main` | `edge`, `sha-<commit>` |
+| Tag `vX.Y.Z` | `vX.Y.Z` |
+| Weekly (Monday 03:17 UTC) and manual run on `main` | Rebuild of `edge` and of the newest release `vX.Y.Z` (same tag, new digest) |
+| Pull request that changes `release.yml` or the `Dockerfile` | Dry run, no push |
+
+There is no `latest` tag. A release:
+
+```sh
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+The job summary shows the digest. Production pins it, so a weekly rebuild changes the running image only after a deliberate update:
+
+```yaml
+services:
+  phylax-mqtt-security-service:
+    image: ghcr.io/noschvie/phylax-mqtt-security-service:v0.1.0@sha256:…
+```
+
+The images carry OCI labels (source, revision, version, license), an SBOM and provenance.
+
 ### Commands
 
 | Command | Purpose |
