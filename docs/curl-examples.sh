@@ -15,15 +15,27 @@ for command in curl jq; do
   fi
 done
 
+printf 'Waiting for PMSS at %s\n' "$BASE_URL"
+for _ in $(seq 1 30); do
+  if curl --noproxy '*' --fail --silent --show-error "$BASE_URL/healthz" >/dev/null; then
+    break
+  fi
+  sleep 1
+done
+if ! curl --noproxy '*' --fail --silent --show-error "$BASE_URL/healthz" >/dev/null; then
+  printf 'PMSS is not reachable at %s\n' "$BASE_URL" >&2
+  exit 1
+fi
+
 read_token="$(
-  curl --fail-with-body --silent --show-error "$TOKEN_URL" \
+  curl --noproxy '*' --fail-with-body --silent --show-error "$TOKEN_URL" \
     --data 'grant_type=client_credentials' \
     --data 'client_id=msm-test-ro' \
     --data 'client_secret=msm-test-ro-secret' |
     jq -er '.access_token'
 )"
 write_token="$(
-  curl --fail-with-body --silent --show-error "$TOKEN_URL" \
+  curl --noproxy '*' --fail-with-body --silent --show-error "$TOKEN_URL" \
     --data 'grant_type=client_credentials' \
     --data 'client_id=msm-test-rw' \
     --data 'client_secret=msm-test-rw-secret' |
@@ -31,7 +43,7 @@ write_token="$(
 )"
 
 get_role_etag() {
-  curl --fail-with-body --silent --show-error --dump-header - --output /dev/null \
+  curl --noproxy '*' --fail-with-body --silent --show-error --dump-header - --output /dev/null \
     --header "Authorization: Bearer $read_token" \
     "$BASE_URL/api/v1/roles/$ROLE" |
     awk 'tolower($1) == "etag:" { sub(/\r$/, "", $2); print $2; exit }'
@@ -41,7 +53,7 @@ cleanup() {
   if [[ "$created" == 1 ]]; then
     local etag
     if etag="$(get_role_etag)" && [[ -n "$etag" ]]; then
-      curl --fail-with-body --silent --show-error --include --request DELETE \
+      curl --noproxy '*' --fail-with-body --silent --show-error --include --request DELETE \
         --header "Authorization: Bearer $write_token" \
         --header "If-Match: $etag" \
         "$BASE_URL/api/v1/roles/$ROLE" || {
@@ -58,14 +70,14 @@ cleanup() {
 trap cleanup EXIT
 
 printf 'GET /api/v1/info\n'
-curl --fail-with-body --silent --show-error --include \
+curl --noproxy '*' --fail-with-body --silent --show-error --include \
   --header "Authorization: Bearer $read_token" \
   "$BASE_URL/api/v1/info"
 
 printf '\nPOST /api/v1/roles (%s)\n' "$ROLE"
 create_body="$(jq -n --arg role "$ROLE" --arg topic "$TOPIC" \
   '{rolename:$role, textname:"curl demo", acls:[{acltype:"publishClientSend",topic:$topic,allow:true}]}')"
-curl --fail-with-body --silent --show-error --include --request POST \
+curl --noproxy '*' --fail-with-body --silent --show-error --include --request POST \
   --header "Authorization: Bearer $write_token" \
   --header 'Content-Type: application/json' \
   --data "$create_body" \
@@ -81,7 +93,7 @@ fi
 printf '\nPUT /api/v1/roles/%s/acls (If-Match: %s)\n' "$ROLE" "$etag"
 replace_body="$(jq -n --arg topic "$TOPIC" \
   '{acls:[{acltype:"publishClientSend",topic:$topic,allow:true},{acltype:"subscribeLiteral",topic:"curl-demo/status",allow:true}]}')"
-curl --fail-with-body --silent --show-error --include --request PUT \
+curl --noproxy '*' --fail-with-body --silent --show-error --include --request PUT \
   --header "Authorization: Bearer $write_token" \
   --header "If-Match: $etag" \
   --header 'Content-Type: application/json' \
