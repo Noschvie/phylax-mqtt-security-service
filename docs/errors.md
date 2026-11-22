@@ -12,7 +12,7 @@ The codes are those of the interface specification "MQTT Security Service API v1
 | 403 | <a id="reserved_name"></a>`reserved_name` | `pmss-*` or `role_security_manager`. |
 | 404 | <a id="not_found"></a>`not_found` | Object or endpoint does not exist. |
 | 409 | <a id="already_exists"></a>`already_exists` | An object with this name exists already. |
-| 409 | <a id="certificate_client"></a>`certificate_client` | Password for a certificate client (`CN=…`). |
+| 409 | <a id="certificate_client"></a>`certificate_client` | Password, `enable` or `disable` for a certificate client (`CN=…`). |
 | 412 | <a id="precondition_failed"></a>`precondition_failed` | `If-Match` does not match the current ETag; nothing was changed. |
 | 413 | <a id="payload_too_large"></a>`payload_too_large` | Request body larger than `limits.maxRequestBytes`. |
 | 422 | <a id="validation_failed"></a>`validation_failed` | Invalid fields; `errors` holds JSON Pointers into the body. |

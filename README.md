@@ -132,6 +132,9 @@ Every `/api/v1` request needs `Authorization: Bearer <access token>` from Keyclo
 | `POST`, `DELETE` | `/api/v1/groups/{group}/roles[/{role}]` | `write` | Assign or remove a role |
 | `POST`, `DELETE` | `/api/v1/roles`, `/api/v1/roles/{role}` | `write` | Create a role with ACLs, delete a role |
 | `PUT` | `/api/v1/roles/{role}/acls` | `write` | Replace the whole ACL list |
+| `PATCH` | `/api/v1/clients/{username}` | `write` | Change the `textname` (PMSS extra) |
+| `POST` | `/api/v1/clients/{username}/enable`, `…/disable` | `write` | Enable or disable a password client (PMSS extra) |
+| `POST`, `DELETE` | `/api/v1/roles/{role}/acls` | `write` | Add or remove one ACL, body `{acltype, topic[, allow, priority]}` (PMSS extra) |
 
 ### Changes
 
@@ -145,7 +148,11 @@ Every changing request runs the same steps (specification 3.2, 3.7, 4.3–4.8; d
 
 Passwords: exactly 24 characters `A–Z a–z 0–9`; generated with `crypto/rand` and returned once (`Cache-Control: no-store`); a given password is never returned. Certificate clients (`CN=…`) have no password. ACLs: `acltype` from the fixed list, `topic` a valid filter, `allow` required, `priority` −100000…100000; a deny rule without higher priority than an overlapping allow rule of the same type gives the warning `deny_priority_not_higher`.
 
-Not yet implemented from the PMSS endpoint list (not used by TasmoFleet): `PATCH` of the textname, `enable`/`disable` (open point: refuse or remove the roles for certificate clients) and single ACLs per `POST`/`DELETE`.
+**PMSS extras** (design 7.3, not in the specification, not used by TasmoFleet):
+
+- `PATCH` changes only `textname`; `textdescription` carries the marker and is `read_only`. Same value → `200` without a broker command.
+- `enable`/`disable` work only for password clients. The broker checks `disabled` only at a password login, so a certificate client (`CN=…`) would stay usable: the service refuses with `409 certificate_client` (decision on open point 8.8, variant A). To lock a certificate client, delete it and issue a certificate with a new subject. Same state → `200` without a broker command.
+- Single ACLs: `POST` adds one ACL (`409 already_exists` for the same `acltype` and `topic`), `DELETE` removes one (`404 not_found` if missing). Both answer `200` with the whole role, the new `ETag` and warnings whose pointers refer to the ACL list in the response; the stored ACLs are compared as for `PUT` (`500 readback_mismatch`).
 
 Path parameters are URL-encoded: `CN=homeassistant,O=mqtt-apps` → `CN%3Dhomeassistant%2CO%3Dmqtt-apps`. Errors are `application/problem+json`, see [docs/errors.md](docs/errors.md).
 
