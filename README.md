@@ -7,6 +7,7 @@ A REST API service for managing Mosquitto Dynamic Security clients, roles and ac
 So far this repository contains:
 
 - The service (`cmd/`, `internal/`).
+- [OpenAPI document](api/openapi.yaml) – machine-readable form of the specification, checked against routes and recorded responses ([test/openapi](test/openapi/README.md)).
 - [Integration tests](test/integration/README.md) – Keycloak, Mosquitto and the service in one compose environment; the whole path token → REST → MQTT/mTLS → DynSec.
 - [Broker integration test](test/integration/broker/README.md) – the broker connection against Mosquitto 2.1.2 with Dynamic Security.
 - [Keycloak integration test](test/integration/keycloak/README.md) – checks scopes, audience, the role mapping of scope `write` and Standard Token Exchange against Keycloak 26.8.2.
@@ -142,6 +143,8 @@ Every `/api/v1` request needs `Authorization: Bearer <access token>` from Keyclo
 - `401 invalid_token` and `403 insufficient_scope` carry `WWW-Authenticate` (RFC 6750). The reason of a rejection is logged, never the token.
 
 ## Endpoints
+
+The machine-readable form is [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1). The Markdown specification stays normative; operations of PMSS that are not in the specification are tagged `pmss-extra`.
 
 | Method | Path | Scope | Purpose |
 |---|---|---|---|
