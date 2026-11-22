@@ -1,8 +1,8 @@
-# API mit curl ausprobieren
+# Try the API with curl
 
-Die OpenAPI-Datei beschreibt die Endpoints und ihre Datenformate. Diese Beispiele zeigen zusätzlich den Ablauf mit Keycloak-Tokens und `ETag`-Headern. Sie sind für die lokale Integrationstest-Umgebung gedacht.
+The OpenAPI file describes the endpoints and their data formats. These examples also demonstrate the workflow with Keycloak tokens and `ETag` headers. They are intended for the local integration test environment.
 
-Für Linux gibt es ein ausführbares Bash-Skript, das eine Demo-Rolle erstellt, ihre ACLs mit `If-Match` ersetzt und sie beim Beenden wieder löscht:
+For Linux, an executable Bash script creates a demo role, replaces its ACLs with `If-Match`, and deletes it on completion:
 
 ```sh
 cd test/integration
@@ -12,13 +12,13 @@ cd ../..
 bash docs/curl-examples.sh
 ```
 
-Benötigt werden `curl` und `jq`. Das Skript verwendet ausschließlich die Credentials des Test-Realm und verändert den lokalen Test-Broker. Es kann alternativ mit `BASE_URL` und `TOKEN_URL` auf andere Testinstanzen zeigen. Nicht gegen Produktion ausführen.
+The script requires `curl` and `jq`. It uses only the credentials of the test realm and modifies the local test broker. You can also point it to other test instances with `BASE_URL` and `TOKEN_URL`. Do not run it against production.
 
-Die folgenden manuellen Beispiele sind für **PowerShell unter Windows**:
+The following manual examples are for **PowerShell on Windows**:
 
-## Testumgebung und Tokens
+## Test environment and tokens
 
-Starte die lokale Umgebung wie in [test/integration](../test/integration/README.md) beschrieben. Die folgenden Schreibzugriffe verändern den Zustand des dortigen Test-Brokers; führe sie nicht gegen eine produktive Instanz aus.
+Start the local environment as described in [test/integration](../test/integration/README.md). The write operations below modify the state of the test broker; do not run them against a production instance.
 
 ```powershell
 $BaseUrl = 'http://127.0.0.1:18080'
@@ -35,20 +35,20 @@ $WriteToken = (curl.exe -fsS $TokenUrl `
   -d 'client_secret=msm-test-rw-secret' | ConvertFrom-Json).access_token
 ```
 
-Diese Credentials gehören ausschließlich zum Test-Realm. In Produktion werden Tokens über die dort konfigurierte Keycloak-Client-Konfiguration bezogen. `write` schließt `read` nicht ein; deshalb verwenden die Beispiele für `GET` den Read-Token und für Änderungen den Write-Token.
+These credentials belong exclusively to the test realm. In production, obtain tokens through the configured Keycloak client configuration. `write` does not include `read`; therefore, the examples use the read token for `GET` requests and the write token for changes.
 
-## Lesen
+## Read
 
 ```powershell
 curl.exe -i -H "Authorization: Bearer $ReadToken" "$BaseUrl/api/v1/info"
 curl.exe -i -H "Authorization: Bearer $ReadToken" "$BaseUrl/api/v1/export"
 ```
 
-`/info` liefert unter anderem die Namenspräfixe und Limits. `/export` zeigt den verwalteten Gesamtzustand. `-i` macht Status und Antwort-Header sichtbar; Fehlerantworten kommen als `application/problem+json`.
+`/info` provides, among other information, name prefixes and limits. `/export` shows the complete managed state. `-i` makes the status and response headers visible; error responses use `application/problem+json`.
 
-## Rolle erstellen, ändern und aufräumen
+## Create, update, and clean up a role
 
-Der folgende Ablauf erstellt eine Testrolle mit einer ACL. Die Rolle wird anschließend mit einem aktuellen `ETag` geändert und wieder gelöscht. `PUT /acls` ersetzt dabei die **gesamte** ACL-Liste.
+The following workflow creates a test role with one ACL. It then updates the role using a current `ETag` and deletes it. `PUT /acls` replaces the **entire** ACL list.
 
 ```powershell
 # Create the role; the response also contains the ETag header.
@@ -78,4 +78,4 @@ curl.exe -i -X DELETE "$BaseUrl/api/v1/roles/tf_curl_demo" `
   -H "If-Match: $RoleETag"
 ```
 
-Ein vorhandenes Objekt muss bei Änderungen mit seinem aktuellen `ETag` geschützt werden: ohne `If-Match` antwortet der Dienst mit `428`, bei einem veralteten ETag mit `412`. Nach einem `504 broker_timeout` ist der Zustand unbekannt: erst erneut lesen, nicht blind denselben Schreibzugriff wiederholen. Tokens laufen nach kurzer Zeit ab; bei `401` die Token-Anforderung erneut ausführen.
+An existing object must be protected by its current `ETag` when it is modified: without `If-Match`, the service responds with `428`; with an outdated ETag, it responds with `412`. After a `504 broker_timeout`, the state is unknown: read the object again instead of blindly repeating the same write operation. Tokens expire after a short time; on `401`, repeat the token request.
