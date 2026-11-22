@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Machine-readable form of the interface specification
-# "MQTT Security Service API v1" (draft v0.7). The Markdown specification is
+# "MQTT Security Service API v1" (draft v0.8). The Markdown specification is
 # normative; a contradiction between the two is an error in this file.
 #
 # Operations tagged "pmss-extra" (x-pmss-extra: true) are additions of the
@@ -16,7 +16,7 @@ info:
   summary: REST API for Mosquitto Dynamic Security clients, groups, roles and ACLs.
   description: |
     Interface between TasmoFleet and an external MQTT Security Service
-    (specification "MQTT Security Service API v1", draft v0.7). The Phylax
+    (specification "MQTT Security Service API v1", draft v0.8). The Phylax
     MQTT Security Service (PMSS) is the reference implementation.
 
     **Normative source** is the Markdown specification. This file describes
@@ -39,7 +39,7 @@ info:
   license:
     name: AGPL-3.0-or-later
     identifier: AGPL-3.0-or-later
-  x-specification-version: "0.7"
+  x-specification-version: "0.8"
 
 servers:
   - url: https://pmss.example.org
