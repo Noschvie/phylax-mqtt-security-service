@@ -1,0 +1,47 @@
+# Whole path of the integration tests (PMSS design, section 7.9):
+# token from Keycloak → REST → MQTT/mTLS → DynSec. Keycloak and Mosquitto
+# come from the compose files of the two subdirectories; the service is
+# built from the repository and runs like in production (read-only,
+# certificates read-only, port 8884 not published by the service).
+#
+#   broker/make-certs.sh
+#   docker compose up -d --build --wait
+#   docker compose logs -f --no-log-prefix pmss > pmss.log &
+#   PMSS_TEST_E2E_URL=http://127.0.0.1:18080 PMSS_TEST_KEYCLOAK=http://127.0.0.1:8180 \
+#   PMSS_TEST_BROKER_PLAIN=127.0.0.1:18883 PMSS_TEST_E2E_LOG=$PWD/pmss.log \
+#     go test -race -count=1 -v ../../test/integration/e2e/
+#   docker compose down -v
+
+name: pmss-it
+
+include:
+  - keycloak/compose.yaml
+  - broker/compose.yaml
+
+services:
+  pmss:
+    build:
+      context: ../..
+      args:
+        VERSION: integration
+    read_only: true
+    environment:
+      PMSS_LOG_LEVEL: debug
+      # Defaults: mqtts://mosquitto:8884, certificates under /run (design 5.3).
+      PMSS_OIDC_ISSUER: http://127.0.0.1:8180/realms/pmss-test
+      PMSS_OIDC_AUDIENCE: phylax-mqtt-security-service
+      PMSS_OIDC_JWKS_URL: http://keycloak:8080/realms/pmss-test/protocol/openid-connect/certs
+      PMSS_OIDC_ALLOW_HTTP: "true"   # test only; production uses https
+    volumes:
+      - ./broker/run/certs/server-ca.crt:/run/mqtt-server-ca/ca.crt:ro
+      - ./broker/run/certs/pmss-admin.crt:/run/secrets/mqtt-client/pmss-admin.crt:ro
+      - ./broker/run/certs/pmss-admin.key:/run/secrets/mqtt-client/pmss-admin.key:ro
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      - mosquitto
+      - keycloak
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/phylax-mqtt-security-service", "healthcheck"]
+      interval: 2s
+      retries: 30

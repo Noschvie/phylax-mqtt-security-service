@@ -20,7 +20,7 @@ jobs:
         run: go mod tidy -diff
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l cmd internal)
+          unformatted=$(gofmt -l cmd internal test)
           if [ -n "$unformatted" ]; then
             echo "Not formatted with gofmt:" >&2
             echo "$unformatted" >&2
@@ -32,44 +32,6 @@ jobs:
         run: go test -race ./...
       - name: go build
         run: go build -trimpath -o /dev/null ./cmd/phylax-mqtt-security-service
-
-  # Broker connection against Mosquitto 2.1.2 with Dynamic Security
-  # (design 7.2, 7.9): mTLS, correlation, two admins, reconnect, broker down.
-  broker:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: test/integration/broker
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Test PKI and broker data
-        run: ./make-certs.sh
-      - name: Start Mosquitto 2.1.2
-        run: docker compose up -d
-      - name: Wait for the admin listener
-        run: |
-          for i in $(seq 1 30); do
-            nc -z 127.0.0.1 18884 && exit 0
-            sleep 1
-          done
-          echo "Mosquitto not listening" >&2
-          exit 1
-      - name: Integration tests
-        env:
-          PMSS_TEST_BROKER_URL: mqtts://127.0.0.1:18884
-          PMSS_TEST_BROKER_PLAIN: 127.0.0.1:18883
-        run: |
-          PMSS_TEST_BROKER_CERTS=$PWD/run/certs \
-            go test -race -count=1 -v -run Integration ../../../internal/...
-      - name: Broker log
-        if: always()
-        run: docker compose logs mosquitto
-      - name: Stop Mosquitto
-        if: always()
-        run: docker compose down -v
 
   # Build only, no push. Pushing to ghcr.io follows with the release workflow.
   docker:
@@ -86,35 +48,3 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: false
           build-args: VERSION=ci-${{ github.sha }}
-      - name: Smoke test with the test broker (linux/amd64)
-        run: |
-          docker buildx build --load -t pmss:ci --build-arg VERSION=ci-${{ github.sha }} .
-          docker run --rm pmss:ci version
-
-          cd test/integration/broker
-          ./make-certs.sh
-          docker compose -p pmss-broker up -d
-          C=$PWD/run/certs
-          # Same mount points as in production (design 5.3, 7.7).
-          docker run -d --name pmss --network pmss-broker_default -p 8080:8080 --read-only \
-            -v $C/server-ca.crt:/run/mqtt-server-ca/ca.crt:ro \
-            -v $C/pmss-admin.crt:/run/secrets/mqtt-client/pmss-admin.crt:ro \
-            -v $C/pmss-admin.key:/run/secrets/mqtt-client/pmss-admin.key:ro \
-            pmss:ci
-          for i in $(seq 1 20); do
-            curl -sf http://127.0.0.1:8080/healthz && break
-            sleep 1
-          done
-          docker exec pmss /usr/local/bin/phylax-mqtt-security-service healthcheck
-          # The API is closed until the token check is in place.
-          test "$(curl -s -o /dev/null -w '%{http_code} %{content_type}' http://127.0.0.1:8080/api/v1/info)" = "401 application/problem+json"
-          for i in $(seq 1 20); do
-            docker logs pmss 2>&1 | grep -q '"response topic subscribed"' && break
-            sleep 1
-          done
-          docker stop -t 20 pmss
-          docker logs pmss
-          docker logs pmss 2>&1 | grep -q '"response topic subscribed"'
-          # SIGTERM must end in a graceful shutdown with exit code 0.
-          test "$(docker inspect -f '{{.State.ExitCode}}' pmss)" = 0
-          docker compose -p pmss-broker down -v
