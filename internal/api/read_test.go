@@ -17,6 +17,7 @@ import (
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/dynsec"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/problem"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/testrecord"
 )
 
 // fakeDynSec answers commands from canned DynSec data.
@@ -87,7 +88,7 @@ var brokerState = map[string]string{
 }
 
 func newTestHandler(f *fakeDynSec, authorizer auth.Authorizer) http.Handler {
-	return NewHandler(Options{
+	return testrecord.Handler(NewHandler(Options{
 		Logger:          discard(),
 		Version:         "v0.0.0-test",
 		Managed:         config.Default().Managed,
@@ -96,7 +97,7 @@ func newTestHandler(f *fakeDynSec, authorizer auth.Authorizer) http.Handler {
 		Auth:            authorizer,
 		BrokerVersion:   func() string { return "2.1.2" },
 		Now:             func() time.Time { return time.Date(2026, 11, 20, 22, 30, 12, 0, time.FixedZone("CET", 3600)) },
-	})
+	}))
 }
 
 func do(t *testing.T, h http.Handler, method, path string) *httptest.ResponseRecorder {
