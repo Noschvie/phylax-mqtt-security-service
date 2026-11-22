@@ -4,7 +4,7 @@
 
 [`check.py`](check.py) keeps the document honest:
 
-1. It is valid OpenAPI 3.1.
+1. It is valid OpenAPI 3.2.
 2. Its operations are exactly the routes in `internal/api/api.go`; `x-pmss-extra` and the tag `pmss-extra` agree.
 3. Every HTTP response that the Go tests recorded matches the document: status, required headers (`ETag`, `Location`, `WWW-Authenticate`), body schema and the error codes per status. `--require-all` fails if an operation was never recorded.
 

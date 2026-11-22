@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Check api/openapi.yaml against the service.
 
-1. The document is valid OpenAPI 3.1.
+1. The document is valid OpenAPI 3.2.
 2. The operations match the routes registered in internal/api/api.go, and
    every addition of PMSS carries the tag "pmss-extra" and x-pmss-extra.
 3. Every response recorded by the Go tests (PMSS_TEST_RECORD_DIR, see

@@ -144,7 +144,7 @@ Every `/api/v1` request needs `Authorization: Bearer <access token>` from Keyclo
 
 ## Endpoints
 
-The machine-readable form is [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1). The Markdown specification stays normative; operations of PMSS that are not in the specification are tagged `pmss-extra`.
+The machine-readable form is [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.2.1). The Markdown specification stays normative; operations of PMSS that are not in the specification are tagged `pmss-extra`.
 
 | Method | Path | Scope | Purpose |
 |---|---|---|---|
