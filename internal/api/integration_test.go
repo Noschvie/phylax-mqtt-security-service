@@ -27,6 +27,7 @@ import (
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/model"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/problem"
 	tb "github.com/Noschvie/phylax-mqtt-security-service/internal/testbroker"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/testrecord"
 )
 
 type allowAll struct{}
@@ -83,7 +84,7 @@ func setup(t *testing.T, c *dynsec.Client) fixture {
 
 func newServer(t *testing.T, c *dynsec.Client, brokerVersion *atomic.Value) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(api.NewHandler(api.Options{
+	srv := httptest.NewServer(testrecord.Handler(api.NewHandler(api.Options{
 		Logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Version:         "it",
 		Managed:         config.Default().Managed,
@@ -91,7 +92,7 @@ func newServer(t *testing.T, c *dynsec.Client, brokerVersion *atomic.Value) *htt
 		DynSec:          c,
 		Auth:            allowAll{},
 		BrokerVersion:   func() string { v, _ := brokerVersion.Load().(string); return v },
-	}))
+	})))
 	t.Cleanup(srv.Close)
 	return srv
 }

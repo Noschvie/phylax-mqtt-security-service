@@ -32,6 +32,8 @@ import (
 	"time"
 
 	"github.com/eclipse/paho.golang/paho"
+
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/testrecord"
 )
 
 const (
@@ -146,6 +148,7 @@ func (e *env) call(token, method, path, body string, headers ...string) result {
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
+	testrecord.Record(method, req.URL.EscapedPath(), resp.StatusCode, resp.Header, raw)
 	r := result{status: resp.StatusCode, header: resp.Header}
 	_ = json.Unmarshal(raw, &r.body)
 	return r

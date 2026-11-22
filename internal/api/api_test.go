@@ -13,13 +13,14 @@ import (
 	"testing"
 
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/testrecord"
 )
 
 func discard() *slog.Logger { return slog.New(slog.NewJSONHandler(io.Discard, nil)) }
 
 func TestHealthz(t *testing.T) {
 	rec := httptest.NewRecorder()
-	NewHandler(Options{Logger: discard()}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	testrecord.Handler(NewHandler(Options{Logger: discard()})).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d, want 200", rec.Code)

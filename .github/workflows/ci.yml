@@ -37,7 +37,16 @@ jobs:
       - name: go vet
         run: go vet ./...
       - name: go test (unit)
+        env:
+          PMSS_TEST_RECORD_DIR: ${{ runner.temp }}/records
         run: go test -race ./...
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: OpenAPI document against routes and recorded responses
+        run: |
+          pip install -q -r test/openapi/requirements.txt
+          python3 test/openapi/check.py --records "$RUNNER_TEMP/records" --require-all
       - name: go build
         run: go build -trimpath -o /dev/null ./cmd/phylax-mqtt-security-service
 

@@ -64,8 +64,17 @@ jobs:
           docker compose -f test/integration/compose.yaml logs -f --no-log-prefix pmss > pmss.log 2>&1 &
           PMSS_TEST_BROKER_CERTS=$PWD/test/integration/broker/run/certs \
           PMSS_TEST_E2E_LOG=$PWD/pmss.log \
+          PMSS_TEST_RECORD_DIR=$RUNNER_TEMP/records \
             go test -race -count=1 -v \
               ./internal/... ./test/integration/e2e/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Responses of the real broker and service against the OpenAPI document
+        working-directory: .
+        run: |
+          pip install -q -r test/openapi/requirements.txt
+          python3 test/openapi/check.py --records "$RUNNER_TEMP/records" --require-all
       - name: Graceful shutdown of the service
         run: |
           docker compose logs pmss | grep -q '"response topic subscribed"'

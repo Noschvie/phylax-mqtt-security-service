@@ -16,6 +16,7 @@ import (
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/config"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/dynsec"
 	"github.com/Noschvie/phylax-mqtt-security-service/internal/problem"
+	"github.com/Noschvie/phylax-mqtt-security-service/internal/testrecord"
 )
 
 const marker = "managed-by: pmss"
@@ -31,13 +32,13 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	fb := newFakeBroker()
 	logs := &bytes.Buffer{}
-	h := NewHandler(Options{
+	h := testrecord.Handler(NewHandler(Options{
 		Logger:          slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		Managed:         config.Default().Managed,
 		MaxRequestBytes: config.MinRequestBytes,
 		DynSec:          fb,
 		Auth:            callerAuth{},
-	})
+	}))
 	// Base state: two managed roles, an unmanaged legacy user and role.
 	fb.roles["tf_role_a"] = &fbRole{Rolename: "tf_role_a"}
 	fb.roles["tf_role_b"] = &fbRole{Rolename: "tf_role_b"}
