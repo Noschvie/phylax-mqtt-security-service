@@ -111,6 +111,13 @@ func NewHandler(opts Options) http.Handler {
 	write("DELETE /api/v1/roles/{role}", s.handleDeleteRole)
 	write("PUT /api/v1/roles/{role}/acls", s.handleReplaceACLs)
 
+	// PMSS extras, not in the specification (design 7.3).
+	write("PATCH /api/v1/clients/{username}", s.handlePatchClient)
+	write("POST /api/v1/clients/{username}/enable", s.handleEnable)
+	write("POST /api/v1/clients/{username}/disable", s.handleDisable)
+	write("POST /api/v1/roles/{role}/acls", s.handleAddACL)
+	write("DELETE /api/v1/roles/{role}/acls", s.handleRemoveACL)
+
 	return accessLog(opts.Logger, s.limitBody(http.HandlerFunc(s.route)))
 }
 
