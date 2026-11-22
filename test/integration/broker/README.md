@@ -5,7 +5,7 @@ Mosquitto 2.1.2 with Dynamic Security for the tests of the broker connection (de
 | File | Content |
 |---|---|
 | `make-certs.sh` | Creates the test PKI and the broker data in `run/` (not committed) |
-| `dynamic-security.json` | DynSec state after the offline bootstrap: default deny, `role_security_manager`, `pmss-admin` and `pmss-breakglass-admin` without password |
+| `dynamic-security.json` | DynSec state after the offline bootstrap: default deny, `role_security_manager`, `pmss-admin` and `pmss-breakglass-admin` without password, `legacy-shared-user` (no password in the test) with `role_legacy` |
 | `mosquitto.conf` | Admin listener 8884 with mTLS, password listener 1883 |
 | `compose.yaml` | Mosquitto, admin listener on `127.0.0.1:18884`, password listener on `127.0.0.1:18883` |
 
