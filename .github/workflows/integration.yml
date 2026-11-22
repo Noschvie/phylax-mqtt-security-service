@@ -1,0 +1,80 @@
+name: Integration
+
+# Integration tests of design 7.9 in one compose environment
+# (test/integration/compose.yaml): Keycloak 26.8.2 with the test realm,
+# Mosquitto 2.1.2 with Dynamic Security and the service built from this
+# commit. Covers the tokens of Keycloak, the broker connection and the
+# whole path token → REST → MQTT/mTLS → DynSec.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: test/integration
+    env:
+      PMSS_TEST_KEYCLOAK: http://127.0.0.1:8180
+      PMSS_TEST_BROKER_URL: mqtts://127.0.0.1:18884
+      PMSS_TEST_BROKER_PLAIN: 127.0.0.1:18883
+      PMSS_TEST_E2E_URL: http://127.0.0.1:18080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test PKI and DynSec state
+        working-directory: test/integration/broker
+        run: ./make-certs.sh
+      - name: Start Keycloak, Mosquitto and the service
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - name: Wait for Keycloak
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8190/health/ready >/dev/null && exit 0
+            sleep 3
+          done
+          echo "Keycloak not ready" >&2
+          exit 1
+      - name: Keycloak tokens (check_tokens.py)
+        run: python3 keycloak/check_tokens.py http://127.0.0.1:8180
+      - name: JWT probe with go-oidc
+        working-directory: test/probes/jwt-go-oidc
+        run: |
+          go mod tidy
+          go test -race -v ./...
+      - name: Integration tests (broker, Keycloak, whole path)
+        working-directory: .
+        run: |
+          docker compose -f test/integration/compose.yaml logs -f --no-log-prefix pmss > pmss.log 2>&1 &
+          PMSS_TEST_BROKER_CERTS=$PWD/test/integration/broker/run/certs \
+          PMSS_TEST_E2E_LOG=$PWD/pmss.log \
+            go test -race -count=1 -v \
+              ./internal/... ./test/integration/e2e/
+      - name: Graceful shutdown of the service
+        run: |
+          docker compose logs pmss | grep -q '"response topic subscribed"'
+          docker compose stop -t 20 pmss
+          # SIGTERM must end with exit code 0.
+          test "$(docker inspect -f '{{.State.ExitCode}}' "$(docker compose ps -aq pmss)")" = 0
+      - name: Save container logs
+        if: failure()
+        run: |
+          mkdir -p logs
+          for s in keycloak mosquitto pmss; do docker compose logs "$s" > "logs/$s.log" 2>&1; done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: integration-logs
+          path: test/integration/logs
+      - name: Stop
+        if: always()
+        run: docker compose down -v
