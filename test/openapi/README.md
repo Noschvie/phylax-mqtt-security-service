@@ -1,6 +1,6 @@
 # OpenAPI check
 
-[`api/openapi.yaml`](../../api/openapi.yaml) is the machine-readable form of the specification "MQTT Security Service API v1" (draft v0.7). **The Markdown specification is normative**; a contradiction between the two is an error in the OpenAPI file. Additions of PMSS that are not in the specification carry the tag `pmss-extra` and `x-pmss-extra: true`.
+[`api/openapi.yaml`](../../api/openapi.yaml) is the machine-readable form of the specification "MQTT Security Service API v1" (draft v0.8). **The Markdown specification is normative**; a contradiction between the two is an error in the OpenAPI file. Additions of PMSS that are not in the specification carry the tag `pmss-extra` and `x-pmss-extra: true`.
 
 [`check.py`](check.py) keeps the document honest:
 
