@@ -1,0 +1,68 @@
+# authentik for the identity provider probe (docs: pmss-authentik-plan,
+# step 1). Test only: fixed secrets, HTTP, admin user for inspection.
+#
+#   ./make-keys.sh
+#   docker compose up -d
+#   python3 check_tokens.py        waits until the blueprint is applied
+#   docker compose down -v
+#
+# Version: current release at the time of the probe. AUTHENTIK_TAG
+# overrides it, e.g. AUTHENTIK_TAG=2026.5.8 docker compose up -d
+
+x-authentik-env: &authentik-env
+  AUTHENTIK_POSTGRESQL__HOST: postgresql
+  AUTHENTIK_POSTGRESQL__NAME: authentik
+  AUTHENTIK_POSTGRESQL__USER: authentik
+  AUTHENTIK_POSTGRESQL__PASSWORD: authentik-test
+  AUTHENTIK_SECRET_KEY: pmss-test-secret-key-not-for-production-use-0123456789
+  AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+  AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+  AUTHENTIK_DISABLE_STARTUP_ANALYTICS: "true"
+  # Test only: admin user akadmin for the admin interface
+  AUTHENTIK_BOOTSTRAP_PASSWORD: admin
+  AUTHENTIK_BOOTSTRAP_EMAIL: admin@example.org
+
+services:
+  postgresql:
+    image: docker.io/library/postgres:18-alpine
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: authentik-test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
+      interval: 5s
+      retries: 20
+    volumes:
+      - database:/var/lib/postgresql
+
+  server:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG:-2026.8.6}
+    command: server
+    environment: *authentik-env
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    ports:
+      # The issuer is built from the Host of each request (no fixed host
+      # name as KC_HOSTNAME in Keycloak); tests on the host use 127.0.0.1:9180.
+      - "127.0.0.1:9180:9000"
+    shm_size: 512mb
+    volumes:
+      - ./blueprints:/blueprints/custom:ro
+      - ./run:/pmss-keys:ro
+
+  worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG:-2026.8.6}
+    command: worker
+    environment: *authentik-env
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    shm_size: 512mb
+    volumes:
+      - ./blueprints:/blueprints/custom:ro
+      - ./run:/pmss-keys:ro
+
+volumes:
+  database:
