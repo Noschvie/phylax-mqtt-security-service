@@ -15,6 +15,16 @@ So far this repository contains:
 
 Broker-side tests (Mosquitto 2.1.2 with Dynamic Security) live in [mqtt-acl-verify](https://github.com/Noschvie/mqtt-acl-verify).
 
+## Documents
+
+| Document | Content |
+|---|---|
+| [`mqtt-security-overview`](docs/mqtt-security-overview.md) | Architecture overview: MQTT security management with TasmoFleet and PMSS |
+| [`mqtt-security-service-api-v1`](docs/mqtt-security-service-api-v1.md) | Interface specification "MQTT Security Service API v1" between TasmoFleet and an MQTT Security Service; normative for the API |
+| [`phylax-mqtt-security-service-design`](docs/phylax-mqtt-security-service-design.md) | Design of PMSS: Mosquitto Dynamic Security, broker connection, token check, audit, tests |
+
+The documents are written in German. References such as "design 7.9" or "specification 3.2" in this repository point to sections of these documents.
+
 ## Layout
 
 | Path | Content |

@@ -21,7 +21,7 @@ go test -race -v ./...           # local test issuer only
 PMSS_TEST_KEYCLOAK=http://127.0.0.1:8180 go test -race -v ./...
 ```
 
-CI runs both in `.github/workflows/keycloak-integration.yml`.
+CI runs both in `.github/workflows/integration.yml`.
 
 ## Results (go-oidc v3.21.0)
 
