@@ -15,7 +15,7 @@ services:
       # Fixed issuer, whatever host name a request uses: tests on the host
       # get tokens via 127.0.0.1:8180, the service in the compose network
       # fetches the JWKS via keycloak:8080 (PMSS_OIDC_JWKS_URL).
-      KC_HOSTNAME: http://192.168.7.39:8180
+      KC_HOSTNAME: http://127.0.0.1:8180
       # Test only: admin console for inspecting the realm
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin

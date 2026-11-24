@@ -28,7 +28,7 @@ services:
     environment:
       PMSS_LOG_LEVEL: debug
       # Defaults: mqtts://mosquitto:8884, certificates under /run (design 5.3).
-      PMSS_OIDC_ISSUER: http://192.168.7.39:8180/realms/pmss-test
+      PMSS_OIDC_ISSUER: http://127.0.0.1:8180/realms/pmss-test
       PMSS_OIDC_AUDIENCE: phylax-mqtt-security-service
       PMSS_OIDC_JWKS_URL: http://keycloak:8080/realms/pmss-test/protocol/openid-connect/certs
       PMSS_OIDC_ALLOW_HTTP: "true"   # test only; production uses https
