@@ -8,6 +8,7 @@ Step 1 of the plan to support authentik next to Keycloak (`pmss-authentik-plan`)
 | `compose.yaml` | authentik (server, worker) and PostgreSQL |
 | `make-keys.sh` | Signing key of the test providers in `run/` (not committed) |
 | `check_tokens.py` | Token checks, Python standard library only |
+| `SECOND-FACTOR.md` | Manual test of the second factor with browser and device code (F-7) |
 
 ## Run
 
@@ -63,4 +64,4 @@ To be confirmed by the run:
 - **`typ`:** authentik sets no `typ` claim; the header carries the default `JWT`. The check of PMSS for `typ == "Bearer"` rejects every authentik token.
 - **`azp`:** authentik sets `azp` to the client ID of the provider that issues the token, after an exchange with `audience` that is the Security Service, not TasmoFleet.
 - **Issuer:** built from the host name of each request (`issuer_mode: per_provider`); authentik has no fixed host name like `KC_HOSTNAME`. All clients have to get their tokens over the same URL.
-- **Not covered:** second factor and device code (F-7) need a browser; the minimum version (F-8) needs runs with older tags.
+- **Not covered:** second factor and device code (F-7) need a browser, see [SECOND-FACTOR.md](SECOND-FACTOR.md); the minimum version (F-8) needs runs with older tags.
