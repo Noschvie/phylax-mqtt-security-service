@@ -8,8 +8,7 @@ name: Integration
 #
 # Job authentik-probe: the token checks against authentik 2026.8.6
 # (test/integration/authentik), separate from Keycloak. It does not
-# involve the service and does not gate the image build yet
-# (continue-on-error).
+# involve the service; like the Keycloak job it gates the image build.
 
 on:
   pull_request:
@@ -105,9 +104,6 @@ jobs:
 
   authentik-probe:
     runs-on: ubuntu-latest
-    # Not part of the release gate yet: a failure shows in the run but
-    # does not fail the workflow called from release.yml.
-    continue-on-error: true
     timeout-minutes: 20
     defaults:
       run:

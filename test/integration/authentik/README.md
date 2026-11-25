@@ -1,6 +1,6 @@
 # authentik probe
 
-Step 1 of the plan to support authentik next to Keycloak (`pmss-authentik-plan`): the token checks of the [Keycloak integration test](../keycloak/README.md) against **authentik 2026.8.6**. The Security Service itself is not involved: the probe checks what authentik puts into the tokens and answers the open questions F-1 to F-8 of the plan as far as they can be automated. CI runs it as job `authentik-probe` in [`.github/workflows/integration.yml`](../../../.github/workflows/integration.yml), separate from the Keycloak job and not yet part of the release gate (`continue-on-error`).
+The token checks of the [Keycloak integration test](../keycloak/README.md) against **authentik 2026.8.6**. The Security Service itself is not involved: the probe checks what authentik puts into the tokens. It was written to decide whether and how PMSS supports authentik next to Keycloak (TasmoFleet supports an authentik login); the questions F-1 to F-8, the results and the decisions are recorded [below](#results-and-decisions). CI runs it as job `authentik-probe` in [`.github/workflows/integration.yml`](../../../.github/workflows/integration.yml), separate from the Keycloak job; like the Keycloak job it gates the image build in `release.yml`.
 
 | File | Content |
 |---|---|
@@ -56,12 +56,37 @@ authentik has no password grant in the usual sense: `grant_type=client_credentia
 
 `INFO` lines record: `typ` in header and claims of access and ID tokens (F-2), form of the `scope` claim (F-3), `azp` and `act` of the exchanged token (F-4), issuer of the exchanged token (F-5), the answer to `write` without `security-admin` (F-1) and the issuer for another `Host` (T-8).
 
-## Expected differences to Keycloak (from the authentik 2026.8.6 source)
+## Results and decisions
 
-To be confirmed by the run:
+### Questions and results
 
-- **`write` without `security-admin`:** Keycloak answers `200` with `scope=read`. authentik grants every requested scope that has a mapping on the provider; only an application policy can stop it, and then the whole request fails (`400 invalid_grant`). TasmoFleet would have to ask for `read write` and fall back to `read`.
-- **`typ`:** authentik sets no `typ` claim; the header carries the default `JWT`. The check of PMSS for `typ == "Bearer"` rejects every authentik token.
-- **`azp`:** authentik sets `azp` to the client ID of the provider that issues the token, after an exchange with `audience` that is the Security Service, not TasmoFleet.
-- **Issuer:** built from the host name of each request (`issuer_mode: per_provider`); authentik has no fixed host name like `KC_HOSTNAME`. All clients have to get their tokens over the same URL.
-- **Not covered:** second factor and device code (F-7) need a browser, see [SECOND-FACTOR.md](SECOND-FACTOR.md); the minimum version (F-8) needs runs with older tags.
+Probe run with authentik 2026.8.6 and PostgreSQL 18 on 24.11.2026: all checks passed.
+
+| No. | Question | Result |
+|---|---|---|
+| F-1 | Can `write` be limited to members of `security-admin`? | ✅ With an expression policy on the application `pmss` (context `oauth_scopes`). Unlike Keycloak (`200` with `scope=read`), authentik refuses the **whole** request with `400 invalid_grant`; the error text does not differ from other refusals |
+| F-2 | Which `typ` do access, ID and refresh tokens carry? | ⚠️ Header `typ: JWT`, **no** `typ` claim. Only the access token has `scope` and `uid`; the ID token of TasmoFleet has `aud` = `tasmofleet-test`; the provider `pmss` issues no ID tokens |
+| F-3 | Does the access token have a `scope` claim, in which form? | ✅ String, separated by spaces (`"read write"`), as with Keycloak |
+| F-4 | `sub`, `preferred_username`, `azp` in the exchanged token? | ⚠️ `sub` and `preferred_username` = user; `azp` = `phylax-mqtt-security-service` (the issuing provider, not TasmoFleet); no `act` (impersonation) |
+| F-5 | Exchanged token: `iss`, `aud`, `scope`, `sub`? | ✅ `iss` = issuer of provider `pmss`, `aud` = `["phylax-mqtt-security-service"]`, `scope` as requested |
+| F-6 | Exchange of a token of another client refused? | ✅ Target provider without trust in TasmoFleet (`invalid_target`), token of the Security Service, token of another application (`invalid_grant`) |
+| F-7 | Does the second factor for `security-admin` also hold for token exchange and device code? | ⏸️ Deferred until an authentik instance is available; test case in [SECOND-FACTOR.md](SECOND-FACTOR.md) |
+| F-8 | From which authentik version does the token exchange work? | ✅ Token exchange (RFC 8693) is new in 2026.8.0; 2026.8.3 fixes the exchange without signing key (PR #26049). Taken from release notes and documentation, not from runs |
+| T-8 | Is the issuer fixed? | ⚠️ No: built from the `Host` of each request (`Host: authentik-server:9000` gives `iss` = `http://authentik-server:9000/application/o/pmss/`); no fixed host name like `KC_HOSTNAME` |
+
+`grant_types_supported` in the discovery document is a fixed list without token exchange; it has no effect.
+
+### Decisions
+
+| No. | Decision | Where |
+|---|---|---|
+| E-A1 | Specification 1.1, backward compatible: any OIDC provider with token exchange (RFC 8693); Keycloak and authentik are the tested providers | Specification 2.1–2.3, S-15 |
+| E-A2 | TasmoFleet asks for `write` only for members of `security-admin`; if refused, retries once with `read`; always evaluates `scope` of the exchanged token (F-1) | Specification 2.2, S-16 |
+| E-A3, E-A11 | `scope` claim required for every provider; `typ` check configurable with `PMSS_OIDC_TYP_CHECK`: `bearer` (default, Keycloak) or `none` (authentik). Keycloak ID tokens carry no `scope` claim (checked in [`../keycloak/check_tokens.py`](../keycloak/check_tokens.py)) (F-2) | Design T-9, SEC-15 |
+| E-A4 | The audit relies on `sub` and `preferred_username`; `azp` is optional extra information (F-4) | Design 7.5 |
+| E-A5 | All callers get their tokens over the same public URL of the provider; the reverse proxy passes `Host`/`X-Forwarded-Host` through. PMSS may fetch the JWKS over the internal network (`PMSS_OIDC_JWKS_URL`) (T-8) | Specification 2.2, design T-8, SEC-40 |
+| E-A6 | The Security Service is offered only with `TASMOFLEET_AUTH_MODE=oidc`; header mode and local accounts have no user token to exchange (also for Keycloak) | Specification 2.2, S-17 |
+| E-A7 | TasmoFleet exchanges a valid access token of the session and refreshes it first if needed (`offline_access`) | Specification 2.2, S-17 |
+| E-A8 | authentik: own provider and application for PMSS (client ID `phylax-mqtt-security-service`); it trusts the TasmoFleet provider (Federated OAuth2/OpenID Providers); `write` limited to group `security-admin` by an expression policy | Specification 2.3, design 7.5 |
+| E-A9 | Minimum version authentik 2026.8.3, tested with 2026.8.6; CI tests only the current version (F-8) | Specification 2.3 |
+| E-A10 | Without `PMSS_OIDC_JWKS_URL` the JWKS address comes from discovery (`jwks_uri`; the `issuer` of the document must match) | Design T-7 |
