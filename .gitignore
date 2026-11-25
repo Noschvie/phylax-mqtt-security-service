@@ -1,0 +1,25 @@
+# Go build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# IDE settings
+.idea/*
+!.idea/.gitignore
+
+# Python test and cache artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*$py.class
+
+# Logs
+*.log
