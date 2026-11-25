@@ -16,7 +16,7 @@ The realm [`pmss-test`](realm/pmss-test-realm.json) contains everything; no manu
 |---|---|
 | Browser flow `browser-security-admin-2fa` | Cookie, then username and password; for realm role `security-admin` an OTP (Condition - user role, OTP Form required). Users without OTP have to set one up at the first sign-in. Also used for the device sign-in |
 | Client `pmss-cli` | Public, device authorization grant only, `read`/`write` as optional scopes (administrator via `curl`) |
-| Client `pmss-api-tester` | Confidential, authorization code with PKCE, standard token exchange, `read`/`write` as optional scopes. Redirect URI `${PMSS_API_TESTER_URL}/auth/callback` (default `http://127.0.0.1:8080`); the client secret is generated at the import (admin console → Clients → `pmss-api-tester` → Credentials) |
+| Client `pmss-api-tester` | Confidential, authorization code with PKCE, standard token exchange, only `read` as optional scope (the API tester is read-only). Redirect URI `${PMSS_API_TESTER_URL}/auth/callback` (default `http://127.0.0.1:8080`), fixed test secret `pmss-api-tester-secret` |
 | Client `tasmofleet-test` | Password grant enabled, **test only** (`check_tokens.py`, e2e). The built-in direct grant flow asks for an OTP only once the user has set one up |
 | Users `alice`, `bob` | `alice` with `security-admin`, `bob` without; password = username; no OTP at import |
 
@@ -32,7 +32,7 @@ Use a private browser window and an authenticator app (TOTP, 6 digits, 30 s). Th
 > After `alice` has set up an OTP, `check_tokens.py` and the e2e test fail for `alice` (password grant without `totp`). Start over with `docker compose down -v`.
 
 > **Note on PMSS**
-> For the calls in the API tester, PMSS must be configured for this realm: issuer `http://127.0.0.1:8180/realms/pmss-test`, audience `phylax-mqtt-security-service`, as in the [combined environment](../README.md).
+> For the calls in the API tester and with `curl`, PMSS must be configured for this realm: issuer `http://127.0.0.1:8180/realms/pmss-test`, audience `phylax-mqtt-security-service`, as in the [combined environment](../README.md).
 
 Variables:
 
@@ -40,6 +40,7 @@ Variables:
 KC=http://127.0.0.1:8180/realms/pmss-test/protocol/openid-connect
 TF_ID=tasmofleet-test;  TF_SECRET=tasmofleet-test-secret
 PMSS_ID=phylax-mqtt-security-service
+PMSS=http://127.0.0.1:18080          # PMSS of the combined environment
 ```
 
 Decode a token (payload):
@@ -55,19 +56,19 @@ jwt() { cut -d. -f2 <<<"$1" | tr '_-' '/+' | base64 -d 2>/dev/null; echo; }
 | K2F-1 | Sign-in `alice` in the API tester, first time | After the password: OTP setup (QR code); no token without it | |
 | K2F-2 | Sign-in `alice` in the API tester, again (new private window) | After the password: OTP prompt | |
 | K2F-3 | Sign-in `bob` in the API tester | No OTP setup, no OTP prompt | |
-| K2F-4 | Exchange in the API tester after K2F-2, `scope=read write`, then a `write` call | Exchanged token: `aud` = Security Service, `scope` = `read write`, user `alice`; PMSS call `2xx` | |
-| K2F-5 | Same for `bob` | Exchange `200` with `scope` = `read` (Keycloak drops `write`); `write` call `403` | |
+| K2F-4 | API tester after K2F-2: exchange and a `GET` call | Tester shows user `alice` and `read`; `GET /api/v1/info` `200` | |
+| K2F-5 | API tester after K2F-3 | Tester shows user `bob` and `read`; `GET /api/v1/info` `200` | |
 | K2F-6 | **Bypass:** password grant `alice` at `tasmofleet-test` **before** K2F-1 (fresh realm), then exchange with `write` | Token with `read write` without a second factor → known gap of the test realm; production: direct access grants disabled on every client | |
 | K2F-7 | Password grant `alice` **after** K2F-1, without `totp` | `401 invalid_grant` | |
-| K2F-8 | Device code `alice` at `pmss-cli`, `scope=read write` | OTP prompt (or setup) in the browser, then consent; token with `read write`, `aud` = Security Service | |
+| K2F-8 | Device code `alice` at `pmss-cli`, `scope=read write`, then a `write` call with `curl` | OTP prompt (or setup) in the browser, then consent; token with `read write`, `aud` = Security Service; role created and deleted (`201`, `204`) | |
 | K2F-9 | Device code `alice`, close the browser at the OTP prompt | Polling stays `authorization_pending`, then `expired_token`; no token | |
-| K2F-10 | Device code `bob`, `scope=read write` | No OTP; token with `scope` = `read` | |
+| K2F-10 | Device code `bob`, `scope=read write`, then the same `write` call | No OTP; token with `scope` = `read`; `POST` `403` | |
 
 ## 3. Steps
 
 ### K2F-1 to K2F-5 – API tester
 
-Configure the API tester with issuer `http://127.0.0.1:8180/realms/pmss-test`, client `pmss-api-tester` and its secret from the admin console. Sign in, watch for OTP setup and prompt, then let the tester exchange the token for audience `phylax-mqtt-security-service` with `scope=read write` and run a harmless `write` call, e.g. create client `tf_k2f-probe` and delete it again.
+Configure the API tester with issuer `http://127.0.0.1:8180/realms/pmss-test`, client `pmss-api-tester` and secret `pmss-api-tester-secret`. Sign in, watch for OTP setup and prompt, then run `GET /api/v1/info` in the explorer. The tester is read-only: it exchanges the token for `read` only and makes no `write` calls; `write` is checked with the device code (K2F-8, K2F-10).
 
 ### K2F-6 / K2F-7 – password grant
 
@@ -105,12 +106,22 @@ until R=$(curl -s "$KC/token" \
 TOK=$(jq -r .access_token <<<"$R"); jwt "$TOK" | jq '{aud, preferred_username, scope}'
 ```
 
-For K2F-9 close the window at the OTP prompt and let the polling run until the code expires (then `Ctrl+C`). The token of K2F-8 can be used in the API tester or with `curl` against PMSS.
+For K2F-9 close the window at the OTP prompt and let the polling run until the code expires (then `Ctrl+C`).
+
+`write` call with the token of K2F-8 (and K2F-10): create a role and delete it again.
+
+```bash
+curl -s -X POST "$PMSS/api/v1/roles" -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
+  --data-raw '{"rolename":"tf_k2f_probe","textname":"K2F probe","acls":[]}' -D hdr -o /dev/null -w '%{http_code}\n'
+ETAG=$(grep -i '^etag:' hdr | cut -d' ' -f2- | tr -d '\r')
+curl -s -X DELETE "$PMSS/api/v1/roles/tf_k2f_probe" -H "Authorization: Bearer $TOK" -H "If-Match: $ETAG" \
+  -o /dev/null -w '%{http_code}\n'
+```
 
 ## 4. Evaluation
 
 > **Expected outcome**
-> - K2F-1 to K2F-5 and K2F-7 to K2F-10 pass → SEC-36 holds for browser sign-in, token exchange and device code.
+> - K2F-1 to K2F-5 and K2F-7 to K2F-10 pass → SEC-36 holds for browser sign-in and device code; the token exchange with `write` is covered by `check_tokens.py` (`tasmofleet-test`).
 > - K2F-6 is a property of the test realm, not of production: there no client has direct access grants, so no token without the browser flow exists. Check this in the production realm (config as code).
 > - The tokens carry no `acr`/`amr` (the realm's own `basic` scope has no such mapper). PMSS does not check them anyway (design 7.5); the second factor is enforced by Keycloak alone.
 

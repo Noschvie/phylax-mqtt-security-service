@@ -166,6 +166,7 @@
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
+      "secret": "pmss-api-tester-secret",
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
@@ -183,8 +184,7 @@
         "basic"
       ],
       "optionalClientScopes": [
-        "read",
-        "write"
+        "read"
       ]
     },
     {
