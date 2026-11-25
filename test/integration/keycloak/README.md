@@ -7,6 +7,7 @@ Checks the Keycloak part of the integration tests from the design document (sect
 | `realm/pmss-test-realm.json` | Test realm `pmss-test`, imported at startup |
 | `compose.yaml` | Keycloak 26.8.2 in dev mode with realm import |
 | `check_tokens.py` | Token checks, Python standard library only |
+| `SECOND-FACTOR.md` | Manual test of the second factor with browser and device code |
 
 ## Run
 
@@ -33,8 +34,11 @@ Expected: 10 × `PASS`, exit code 0. CI runs the same check in the combined envi
 | `msm-test-rw` | Service account with `read`, `write` and role `security-admin` |
 | `msm-test-ro` | Service account with `read` only |
 | `msm-test-rw-norole` | Service account with `read`, `write`, **without** `security-admin` (checks the role mapping) |
-| `tasmofleet-test` | Confidential client, Standard Token Exchange enabled, `read`/`write` as optional scopes, password grant for the test users |
-| Users `alice`, `bob` | `alice` with `security-admin`, `bob` without; password = username |
+| `tasmofleet-test` | Confidential client, Standard Token Exchange enabled, `read`/`write` as optional scopes, password grant for the test users (test only) |
+| `pmss-api-tester` | Confidential client for the read-only API tester: authorization code with PKCE, Standard Token Exchange, only `read` as optional scope; redirect URI from `PMSS_API_TESTER_URL` (default `http://127.0.0.1:8080`), secret `pmss-api-tester-secret` |
+| `pmss-cli` | Public client, device authorization grant only, `read`/`write` as optional scopes (administrator via `curl`) |
+| Browser flow `browser-security-admin-2fa` | OTP for realm role `security-admin`, set up at the first sign-in; also for the device sign-in ([SECOND-FACTOR.md](SECOND-FACTOR.md)) |
+| Users `alice`, `bob` | `alice` with `security-admin`, `bob` without; password = username; no OTP at import, so the password grant works without `totp` |
 
 All secrets are fixed test values. The realm exists only for these tests.
 
