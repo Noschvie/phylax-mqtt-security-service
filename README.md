@@ -2,7 +2,7 @@
 
 A REST API service for managing Mosquitto Dynamic Security clients, roles and access control.
 
-**Status:** under development. In place: service skeleton (configuration, structured logging, health check, graceful shutdown, container image, CI) the connection to the Dynamic Security Control API (mTLS, MQTT 5, correlation of responses, reconnect) and the endpoints of the interface specification "MQTT Security Service API v1" with the token check for Keycloak access tokens and the audit log. **Without `PMSS_OIDC_ISSUER` every `/api/v1` request is refused with `401`.**
+**Status:** under development. In place: service skeleton (configuration, structured logging, health check, graceful shutdown, container image, CI) the connection to the Dynamic Security Control API (mTLS, MQTT 5, correlation of responses, reconnect) and the endpoints of the interface specification "MQTT Security Service API v1" with the token check for access tokens of an OIDC provider (Keycloak or authentik) and the audit log. **Without `PMSS_OIDC_ISSUER` every `/api/v1` request is refused with `401`.**
 
 So far this repository contains:
 
@@ -34,7 +34,7 @@ The documents are written in German. References such as "design 7.9" or "specifi
 | `internal/api/` | HTTP server, routes, access log |
 | `internal/mqttclient/` | MQTT 5 connection to the admin listener (`autopaho`, mTLS, subscription in `OnConnectionUp`) |
 | `internal/dynsec/` | DynSec commands, `correlationData`, timeouts, error kinds |
-| `internal/auth/` | Token check: go-oidc plus `typ` and scopes, throttled JWKS key set, caller for the audit |
+| `internal/auth/` | Token check: go-oidc plus `scope` claim, optional `typ` check and scopes, throttled JWKS key set, caller for the audit |
 | `internal/rules/` | Checks of the write endpoints: names, passwords, ACLs, topic filters, deny warnings |
 | `internal/audit/` | Audit records (`"log_type":"audit"`) with caller, before and after |
 | `internal/model/` | API objects from DynSec data: defaults, sorting, ETag, managed flag, `authType` |
@@ -122,12 +122,13 @@ All settings are environment variables with defaults. Invalid values stop the se
 | `PMSS_GROUP_PREFIX` | `tf_` | Prefix of managed groups |
 | `PMSS_CLIENT_MARKER` | `managed-by: pmss` | `textdescription` of managed clients |
 | `PMSS_MAX_REQUEST_BYTES` | `1048576` | Largest request body, at least 1 MiB |
-| `PMSS_OIDC_ISSUER` | – | Keycloak realm URL, e.g. `https://kc.example.org/realms/pmss`; `iss` must match exactly. Empty: API closed |
+| `PMSS_OIDC_ISSUER` | – | Fixed issuer of the OIDC provider, e.g. `https://kc.example.org/realms/pmss` (Keycloak) or `https://auth.example.org/application/o/pmss/` (authentik); `iss` must match exactly. Empty: API closed |
 | `PMSS_OIDC_AUDIENCE` | `phylax-mqtt-security-service` | Must be contained in `aud` |
-| `PMSS_OIDC_JWKS_URL` | from discovery | JWKS address, e.g. an internal URL of Keycloak |
+| `PMSS_OIDC_JWKS_URL` | from discovery | JWKS address, e.g. an internal URL of the provider |
 | `PMSS_OIDC_SCOPE_READ` | `read` | Scope name for reading endpoints |
 | `PMSS_OIDC_SCOPE_WRITE` | `write` | Scope name for changing endpoints |
 | `PMSS_OIDC_JWKS_MIN_REFRESH` | `1m` | Minimum time between JWKS fetches for unknown key IDs |
+| `PMSS_OIDC_TYP_CHECK` | `bearer` | `bearer`: claim `typ` must be `Bearer` (Keycloak); `none`: no `typ` check (authentik sets no `typ` claim) |
 | `PMSS_OIDC_ALLOW_HTTP` | `false` | Allow `http://` for issuer and JWKS (test setups only) |
 | `PMSS_DYNSEC_TIMEOUT` | `5s` | Limit per DynSec command (waiting for the connection, publish, response); shorter than `PMSS_HTTP_WRITE_TIMEOUT` |
 
@@ -145,11 +146,14 @@ Decision A-9 of the design (section 7.2):
 
 ## Token check
 
-Every `/api/v1` request needs `Authorization: Bearer <access token>` from Keycloak (design 7.5, T-7, SEC-15):
+Every `/api/v1` request needs `Authorization: Bearer <access token>` from the OIDC provider, Keycloak or authentik (design 7.5, T-7 to T-9, SEC-15):
 
-- `coreos/go-oidc/v3` checks the signature (`RS256`, `ES256` only), `iss`, `aud` (contains the audience), `exp` (no leeway) and `nbf` (5 min leeway).
-- The service checks `typ == "Bearer"` (ID and refresh tokens are refused), `sub` present and the scope: `read` for `GET`, `write` for changes; `write` does not include `read`. Roles are not checked – Keycloak issues `write` only to `security-admin`.
-- Discovery and JWKS are fetched on the first token, so the service starts without Keycloak. An unknown key ID triggers at most one JWKS fetch per `PMSS_OIDC_JWKS_MIN_REFRESH`; after a failed fetch the next try is 5 s later. Known keys keep working while Keycloak is down.
+- `coreos/go-oidc/v3` checks the signature (`RS256`, `ES256` only), `iss` (one fixed issuer per provider, T-8), `aud` (contains the audience), `exp` (no leeway) and `nbf` (5 min leeway).
+- The token must carry a `scope` claim; tokens without one (ID tokens) are refused with `401 invalid_token`.
+- `PMSS_OIDC_TYP_CHECK=bearer` (default, Keycloak) also requires `typ == "Bearer"`, so ID and refresh tokens are refused. authentik sets no `typ` claim: use `none`; the `scope` claim and the audience keep ID tokens out.
+- `sub` must be present. Scopes: `read` for `GET`, `write` for changes; `write` does not include `read`. Roles are not checked – the provider issues `write` only to `security-admin`.
+- `azp` is recorded in the audit as sent; the service makes no assumption about it (Keycloak: the requesting client, authentik after token exchange: the service itself).
+- Without `PMSS_OIDC_JWKS_URL` the JWKS address is taken from the discovery document (`jwks_uri`, its `issuer` must match). Discovery and JWKS are fetched on the first token, so the service starts without the provider. An unknown key ID triggers at most one JWKS fetch per `PMSS_OIDC_JWKS_MIN_REFRESH`; after a failed fetch the next try is 5 s later. Known keys keep working while the provider is down.
 - `401 invalid_token` and `403 insufficient_scope` carry `WWW-Authenticate` (RFC 6750). The reason of a rejection is logged, never the token.
 
 ## Endpoints

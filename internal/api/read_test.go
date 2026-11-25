@@ -136,7 +136,7 @@ func TestInfo(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
-	want := `{"apiVersion":"1.0","implementation":{"name":"phylax-mqtt-security-service","version":"v0.0.0-test"},` +
+	want := `{"apiVersion":"1.1","implementation":{"name":"phylax-mqtt-security-service","version":"v0.0.0-test"},` +
 		`"broker":{"product":"mosquitto","version":"2.1.2"},` +
 		`"managed":{"rolePrefix":"tf_","groupPrefix":"tf_","clientMarker":"managed-by: pmss"},` +
 		`"passwordPolicy":{"length":24,"alphabet":"A-Za-z0-9"},"reservedNames":["pmss-*","role_security_manager"],` +
@@ -160,7 +160,7 @@ func TestExport(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ExportedAt != "2026-11-20T21:30:12Z" || got.APIVersion != "1.0" {
+	if got.ExportedAt != "2026-11-20T21:30:12Z" || got.APIVersion != "1.1" {
 		t.Errorf("header fields %q %q", got.ExportedAt, got.APIVersion)
 	}
 	names := func(n int, f func(int) string) []string {

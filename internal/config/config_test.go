@@ -59,6 +59,7 @@ func TestLoadOverrides(t *testing.T) {
 		EnvOIDCScopeWrite:     "pmss.write",
 		EnvOIDCAllowHTTP:      "true",
 		EnvOIDCJWKSMinRefresh: "30s",
+		EnvOIDCTypCheck:       "none",
 	}))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -77,6 +78,7 @@ func TestLoadOverrides(t *testing.T) {
 			Issuer: "http://127.0.0.1:8180/realms/pmss-test", Audience: "pmss",
 			JWKSURL:   "http://keycloak:8080/realms/pmss-test/protocol/openid-connect/certs",
 			ScopeRead: "pmss.read", ScopeWrite: "pmss.write", AllowHTTP: true, JWKSMinRefresh: 30 * time.Second,
+			TypCheck: "none",
 		},
 		MQTT: MQTT{
 			BrokerURL:      &url.URL{Scheme: "mqtts", Host: "127.0.0.1:18884"},
@@ -188,7 +190,7 @@ func TestLoadOIDC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.OIDC.Issuer != "" || cfg.OIDC.Audience != "phylax-mqtt-security-service" || cfg.OIDC.ScopeRead != "read" || cfg.OIDC.ScopeWrite != "write" {
+	if cfg.OIDC.Issuer != "" || cfg.OIDC.Audience != "phylax-mqtt-security-service" || cfg.OIDC.ScopeRead != "read" || cfg.OIDC.ScopeWrite != "write" || cfg.OIDC.TypCheck != "bearer" {
 		t.Errorf("defaults %+v", cfg.OIDC)
 	}
 	if _, err := Load(env(map[string]string{EnvOIDCIssuer: "https://kc.example.org/realms/pmss"})); err != nil {
@@ -202,6 +204,7 @@ func TestLoadOIDC(t *testing.T) {
 		"jwks over http":     {EnvOIDCIssuer: "https://kc.example.org/realms/pmss", EnvOIDCJWKSURL: "http://keycloak/certs"},
 		"allow not a bool":   {EnvOIDCAllowHTTP: "yes please"},
 		"same scope names":   {EnvOIDCScopeRead: "x", EnvOIDCScopeWrite: "x"},
+		"unknown typ check":  {EnvOIDCTypCheck: "Bearer"},
 	} {
 		if _, err := Load(env(e)); err == nil {
 			t.Errorf("%s: accepted", name)
