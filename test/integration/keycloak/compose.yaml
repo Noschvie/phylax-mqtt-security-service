@@ -19,6 +19,9 @@ services:
       # Test only: admin console for inspecting the realm
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Base URL of the API tester (redirect URI of client pmss-api-tester),
+      # resolved during the realm import
+      PMSS_API_TESTER_URL: ${PMSS_API_TESTER_URL:-http://127.0.0.1:8080}
     ports:
       - "8180:8080"   # realm endpoints
       - "8190:9000"   # management: /health/ready (host 8190, 9000 is Portainer)

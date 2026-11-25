@@ -172,18 +172,40 @@
       "serviceAccountsEnabled": false,
       "protocol": "openid-connect",
       "redirectUris": [
-        "http://192.168.7.39:8080/auth/callback"
+        "${PMSS_API_TESTER_URL:http://127.0.0.1:8080}/auth/callback"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://192.168.7.39:8080/",
+        "post.logout.redirect.uris": "${PMSS_API_TESTER_URL:http://127.0.0.1:8080}/",
         "standard.token.exchange.enabled": "true"
       },
       "defaultClientScopes": [
         "basic"
       ],
       "optionalClientScopes": [
-        "read"
+        "read",
+        "write"
+      ]
+    },
+    {
+      "clientId": "pmss-cli",
+      "name": "Administrator via curl (device authorization grant)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true"
+      },
+      "defaultClientScopes": [
+        "basic"
+      ],
+      "optionalClientScopes": [
+        "read",
+        "write"
       ]
     },
     {
@@ -261,6 +283,88 @@
       "enabled": true,
       "serviceAccountClientId": "msm-test-rw-norole",
       "realmRoles": []
+    }
+  ],
+  "browserFlow": "browser-security-admin-2fa",
+  "authenticationFlows": [
+    {
+      "alias": "browser-security-admin-2fa",
+      "description": "Browser and device sign-in; OTP required for security-admin (design 7.5, SEC-36)",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "browser-security-admin-2fa forms",
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "browser-security-admin-2fa forms",
+      "description": "Username and password, then the second factor",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "browser-security-admin-2fa otp",
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "browser-security-admin-2fa otp",
+      "description": "OTP for users with realm role security-admin; set up at the first sign-in",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-role",
+          "authenticatorConfig": "role security-admin",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "role security-admin",
+      "config": {
+        "condUserRole": "security-admin",
+        "negate": "false"
+      }
     }
   ]
 }
