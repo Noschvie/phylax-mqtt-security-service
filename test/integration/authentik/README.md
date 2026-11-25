@@ -1,6 +1,6 @@
 # authentik probe
 
-Step 1 of the plan to support authentik next to Keycloak (`pmss-authentik-plan`): the token checks of the [Keycloak integration test](../keycloak/README.md) against **authentik 2026.8.6**. The Security Service itself is not involved: the probe checks what authentik puts into the tokens and answers the open questions F-1 to F-8 of the plan as far as they can be automated. Not part of CI yet.
+Step 1 of the plan to support authentik next to Keycloak (`pmss-authentik-plan`): the token checks of the [Keycloak integration test](../keycloak/README.md) against **authentik 2026.8.6**. The Security Service itself is not involved: the probe checks what authentik puts into the tokens and answers the open questions F-1 to F-8 of the plan as far as they can be automated. CI runs it as job `authentik-probe` in [`.github/workflows/integration.yml`](../../../.github/workflows/integration.yml), separate from the Keycloak job and not yet part of the release gate (`continue-on-error`).
 
 | File | Content |
 |---|---|
@@ -22,7 +22,7 @@ docker compose down -v
 
 Expected: only `PASS` and `INFO` lines, exit code 0. Exit code 2: authentik did not answer or the blueprint was not applied; see `docker compose logs worker`. The admin interface is at `http://127.0.0.1:9180/if/admin/` (user `akadmin`, password `admin`), the blueprint under System → Blueprints.
 
-Another version: `AUTHENTIK_TAG=2026.5.8 docker compose up -d`.
+Another version (at least 2026.8.3, the first with a working token exchange): `AUTHENTIK_TAG=2026.8.3 docker compose up -d`.
 
 ## Test configuration
 

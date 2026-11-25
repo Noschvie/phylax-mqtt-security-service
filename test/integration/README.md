@@ -26,12 +26,12 @@ PMSS_TEST_BROKER_PLAIN=127.0.0.1:18883 \
 PMSS_TEST_BROKER_CERTS=$PWD/test/integration/broker/run/certs \
 PMSS_TEST_E2E_URL=http://127.0.0.1:18080 \
 PMSS_TEST_E2E_LOG=$PWD/test/integration/pmss.log \
-  go test -race -count=1 ./internal/... ./test/integration/e2e/
+  go test -race -count=1 -p 1 ./internal/... ./test/integration/e2e/
 
 cd test/integration && docker compose down -v
 ```
 
-Every test package skips its integration tests when its variables are missing, so `go test ./...` without the environment stays a pure unit test. CI runs the same steps in [`.github/workflows/integration.yml`](../../.github/workflows/integration.yml), plus `keycloak/check_tokens.py`, the JWT probe and a graceful shutdown of the service (exit code 0 after `SIGTERM`).
+`-p 1` runs the packages one after the other: they share one broker, and the export test (`internal/api`) compares two exports of all managed objects, which objects of a parallel package would change. Every test package skips its integration tests when its variables are missing, so `go test ./...` without the environment stays a pure unit test. CI runs the same steps in [`.github/workflows/integration.yml`](../../.github/workflows/integration.yml), plus `keycloak/check_tokens.py`, the JWT probe and a graceful shutdown of the service (exit code 0 after `SIGTERM`). The [authentik probe](authentik/README.md) runs as a separate job `authentik-probe` in the same workflow; it does not gate the image build yet.
 
 ## What runs
 

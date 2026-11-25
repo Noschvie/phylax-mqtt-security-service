@@ -20,7 +20,7 @@ docker compose up -d
 PMSS_TEST_BROKER_URL=mqtts://127.0.0.1:18884 \
 PMSS_TEST_BROKER_PLAIN=127.0.0.1:18883 \
 PMSS_TEST_BROKER_CERTS=$PWD/run/certs \
-  go test -race -count=1 -v -run Integration ../../../internal/...
+  go test -race -count=1 -p 1 -v -run Integration ../../../internal/...
 docker compose down
 ```
 
