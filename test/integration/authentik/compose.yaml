@@ -7,7 +7,7 @@
 #   docker compose down -v
 #
 # Version: current release at the time of the probe. AUTHENTIK_TAG
-# overrides it, e.g. AUTHENTIK_TAG=2026.5.8 docker compose up -d
+# overrides it (at least 2026.8.3), e.g. AUTHENTIK_TAG=2026.8.3 docker compose up -d
 
 x-authentik-env: &authentik-env
   AUTHENTIK_POSTGRESQL__HOST: postgresql
