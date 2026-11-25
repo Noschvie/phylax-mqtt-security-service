@@ -65,12 +65,15 @@ jobs:
           go test -race -v ./...
       - name: Integration tests (broker, Keycloak, whole path)
         working-directory: .
+        # -p 1: all packages share one broker; the export test of
+        # internal/api must not see objects of other packages (e2e,
+        # dynsec) created at the same time.
         run: |
           docker compose -f test/integration/compose.yaml logs -f --no-log-prefix pmss > pmss.log 2>&1 &
           PMSS_TEST_BROKER_CERTS=$PWD/test/integration/broker/run/certs \
           PMSS_TEST_E2E_LOG=$PWD/pmss.log \
           PMSS_TEST_RECORD_DIR=$RUNNER_TEMP/records \
-            go test -race -count=1 -v \
+            go test -race -count=1 -p 1 -v \
               ./internal/... ./test/integration/e2e/
       - uses: actions/setup-python@v5
         with:
