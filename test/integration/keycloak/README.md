@@ -51,6 +51,7 @@ All secrets are fixed test values. The realm exists only for these tests.
 | `msm-test-ro` requests `write` | `400 invalid_scope` |
 | Service account with scope `write` but without `security-admin` | no `write` |
 | Original TasmoFleet token of a user | `aud` does not contain the Security Service |
+| ID token of a user (scope `openid read write`) | no `scope` claim, `typ` = `ID`; the access token of the same response has `scope` (design T-9) |
 | Token exchange for `alice` (`security-admin`) | `aud` = Security Service only, `read write`, `sub` and `preferred_username` = alice |
 | Token exchange for `bob` (no `security-admin`) | no `write` |
 | Token exchange for `bob`, scope `read` | `read`, `aud` = Security Service, user = bob |
