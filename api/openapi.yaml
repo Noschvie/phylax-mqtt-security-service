@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Machine-readable form of the interface specification
-# "MQTT Security Service API v1" (v1.0). The Markdown specification is
+# "MQTT Security Service API v1" (v1.1). The Markdown specification is
 # normative; a contradiction between the two is an error in this file.
 #
 # Operations tagged "pmss-extra" (x-pmss-extra: true) are additions of the
@@ -16,7 +16,7 @@ info:
   summary: REST API for Mosquitto Dynamic Security clients, groups, roles and ACLs.
   description: |
     Interface between TasmoFleet and an external MQTT Security Service
-    (specification "MQTT Security Service API v1", v1.0). The Phylax
+    (specification "MQTT Security Service API v1", v1.1). The Phylax
     MQTT Security Service (PMSS) is the reference implementation.
 
     **Normative source** is the Markdown specification. This file describes
@@ -26,9 +26,10 @@ info:
 
     Rules that apply to every operation:
 
-    - Tokens from Keycloak only (`Authorization: Bearer`, security scheme
-      `keycloak`), scope `read` for `GET`, `write` for changes; `write` does
-      not include `read` (spec 2.1).
+    - Tokens from the configured OIDC provider only (`Authorization:
+      Bearer`, security scheme `oidc`), access tokens with a `scope` claim,
+      scope `read` for `GET`, `write` for changes; `write` does not include
+      `read` (spec 2.1).
     - Unknown request fields → `422` (spec 3.1).
     - Changes on existing objects need `If-Match` with the current `ETag`:
       `428` if missing, `412` if different (spec 3.2).
@@ -40,14 +41,14 @@ info:
   license:
     name: AGPL-3.0-or-later
     identifier: AGPL-3.0-or-later
-  x-specification-version: "1.0"
+  x-specification-version: "1.1"
 
 servers:
   - url: https://pmss.example.org
     description: Example; behind a TLS-terminating reverse proxy
 
 security:
-  - keycloak: [read]
+  - oidc: [read]
 
 tags:
   - name: info
@@ -159,7 +160,7 @@ paths:
         clients (`CN=…`) never have a password. An unknown role or group
         deletes the client again (compensation, spec 4.3).
       security:
-        - keycloak: [write]
+        - oidc: [write]
       requestBody:
         required: true
         content:
@@ -214,7 +215,7 @@ paths:
         The broker drops an open connection of the client. Names of locked
         clients are not reused; successors get a running number (spec 4.5).
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       responses:
@@ -234,7 +235,7 @@ paths:
       summary: Change the textname
       description: "`textdescription` carries the marker and cannot be changed (`422`, error code `read_only`)."
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody:
@@ -276,7 +277,7 @@ paths:
         `504`, because a password change cannot be read back (spec 3.7).
         TasmoFleet allows only one running password change per client.
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody:
@@ -315,7 +316,7 @@ paths:
       summary: Enable a password client
       description: Certificate clients (`CN=…`) → `409 certificate_client` (open point 8.8, variant A). Same state → `200` without a broker command.
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody: { $ref: "#/components/requestBodies/EmptyObject" }
@@ -347,7 +348,7 @@ paths:
         variant A); lock them with `DELETE`. Same state → `200` without a
         broker command.
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody: { $ref: "#/components/requestBodies/EmptyObject" }
@@ -374,7 +375,7 @@ paths:
       summary: Assign a role to a client
       description: "`If-Match` and the new ETag belong to the client (S-4). The response is the changed client (S-10)."
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody:
@@ -405,7 +406,7 @@ paths:
       operationId: removeClientRole
       summary: Remove a role from a client
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       responses:
@@ -448,7 +449,7 @@ paths:
       summary: Create a group
       description: The name needs the group prefix from `GET /api/v1/info` (`tf_`).
       security:
-        - keycloak: [write]
+        - oidc: [write]
       requestBody:
         required: true
         content:
@@ -498,7 +499,7 @@ paths:
       operationId: deleteGroup
       summary: Delete a group
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       responses:
@@ -521,7 +522,7 @@ paths:
       summary: Add a client to a group
       description: "Membership belongs to the group: `If-Match` and the new ETag are those of the group; the ETag of the client stays (S-4)."
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody:
@@ -557,7 +558,7 @@ paths:
       operationId: removeGroupClient
       summary: Remove a client from a group
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       responses:
@@ -579,7 +580,7 @@ paths:
       operationId: addGroupRole
       summary: Assign a role to a group
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody:
@@ -610,7 +611,7 @@ paths:
       operationId: removeGroupRole
       summary: Remove a role from a group
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       responses:
@@ -657,7 +658,7 @@ paths:
         difference the role is deleted again (`500 readback_mismatch`,
         S-6).
       security:
-        - keycloak: [write]
+        - oidc: [write]
       requestBody:
         required: true
         content:
@@ -708,7 +709,7 @@ paths:
       operationId: deleteRole
       summary: Delete a role
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       responses:
@@ -731,7 +732,7 @@ paths:
       summary: Replace the whole ACL list of a role
       description: One `modifyRole`, then the role is read back and compared (SEC-30, spec 4.8).
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody:
@@ -766,7 +767,7 @@ paths:
       summary: Add one ACL
       description: The same `acltype` and `topic` again → `409 already_exists`. Response is the whole role; warning pointers refer to its ACL list.
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody:
@@ -795,7 +796,7 @@ paths:
       summary: Remove one ACL
       description: Key is `acltype` + `topic`; a missing ACL → `404`. Response is the whole role (`200`).
       security:
-        - keycloak: [write]
+        - oidc: [write]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody:
@@ -825,15 +826,18 @@ paths:
 
 components:
   securitySchemes:
-    keycloak:
+    oidc:
       type: oauth2
       description: |
-        Access tokens of Keycloak, sent as `Authorization: Bearer <JWT>`
-        (RFC 6750). The service only verifies tokens: signature (JWKS),
-        `iss`, `aud` = the service, `exp`/`nbf`, `typ` = `Bearer`, and the
-        scopes from the claim `scope` (spec 2.1). `read` is needed for `GET`,
-        `write` for changes; `write` does not include `read`. Keycloak gives
-        `write` only to users with the role `security-admin`. The flow that
+        Access tokens of the configured OIDC provider (tested: Keycloak,
+        authentik), sent as `Authorization: Bearer <JWT>` (RFC 6750). The
+        service only verifies tokens: signature (JWKS), `iss`, `aud` = the
+        service, `exp`/`nbf`, the algorithm, and the scopes from the claim
+        `scope`, which every token must have (spec 2.1). Further checks of
+        the token type (e.g. `typ` = `Bearer` with Keycloak) depend on the
+        provider. `read` is needed for `GET`, `write` for changes; `write`
+        does not include `read`. The provider gives `write` only to users
+        with the role or group `security-admin` (spec 2.3). The flow that
         produced the token does not matter to the service.
 
         Ways to a token (design 7.5):
@@ -846,9 +850,10 @@ components:
           login and second factor in the browser (T-4).
         - **Scripts, monitoring:** Client Credentials, in production only
           with `read` (SEC-35). `write` by Client Credentials exists only in
-          the test realm.
+          test environments.
 
-        The URLs are examples for a Keycloak realm.
+        The URLs are examples for a Keycloak realm; they depend on the
+        provider (spec 2.2).
       flows:
         deviceAuthorization:
           deviceAuthorizationUrl: https://keycloak.example.org/realms/example/protocol/openid-connect/auth/device
@@ -860,7 +865,7 @@ components:
           tokenUrl: https://keycloak.example.org/realms/example/protocol/openid-connect/token
           scopes:
             read: Read all objects (all `GET` endpoints)
-            write: Test realm only; no service account has `write` in production (SEC-35)
+            write: Test environments only; no service account has `write` in production (SEC-35)
 
   parameters:
     Username:
