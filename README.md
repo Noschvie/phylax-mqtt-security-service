@@ -22,7 +22,7 @@ Broker-side tests (Mosquitto 2.1.2 with Dynamic Security) live in [mqtt-acl-veri
 | [`mqtt-security-overview`](docs/mqtt-security-overview.md) | Architecture overview: MQTT security management with TasmoFleet and PMSS |
 | [`mqtt-security-service-api-v1`](docs/mqtt-security-service-api-v1.md) | Interface specification "MQTT Security Service API v1" between TasmoFleet and an MQTT Security Service; normative for the API |
 | [`phylax-mqtt-security-service-design`](docs/phylax-mqtt-security-service-design.md) | Design of PMSS: Mosquitto Dynamic Security, broker connection, token check, audit, tests |
-| [`pmss-implementierungsplan`](docs/pmss-implementierungsplan.de.md) | Implementation plan: steps 0–7 with status and pull requests |
+| [`pmss-implementation-plan`](docs/pmss-implementation-plan.md) | Implementation plan: steps 0–7 with status and pull requests |
 
 The documents are written in German. References such as "design 7.9" or "specification 3.2" in this repository point to sections of these documents.
 
