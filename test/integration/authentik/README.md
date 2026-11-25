@@ -1,6 +1,6 @@
 # authentik probe
 
-Step 1 of the plan to support authentik next to Keycloak (`pmss-authentik-plan`): the token checks of the [Keycloak integration test](../keycloak/README.md) against **authentik 2026.8.6**. The Security Service itself is not involved: the probe checks what authentik puts into the tokens and answers the open questions F-1 to F-8 of the plan as far as they can be automated. CI runs it as job `authentik-probe` in [`.github/workflows/integration.yml`](../../../.github/workflows/integration.yml), separate from the Keycloak job and not yet part of the release gate (`continue-on-error`).
+Step 1 of the plan to support authentik next to Keycloak (`pmss-authentik-plan`): the token checks of the [Keycloak integration test](../keycloak/README.md) against **authentik 2026.8.6**. The Security Service itself is not involved: the probe checks what authentik puts into the tokens and answers the open questions F-1 to F-8 of the plan as far as they can be automated. CI runs it as job `authentik-probe` in [`.github/workflows/integration.yml`](../../../.github/workflows/integration.yml), separate from the Keycloak job; like the Keycloak job it gates the image build in `release.yml`.
 
 | File | Content |
 |---|---|
@@ -61,7 +61,7 @@ authentik has no password grant in the usual sense: `grant_type=client_credentia
 To be confirmed by the run:
 
 - **`write` without `security-admin`:** Keycloak answers `200` with `scope=read`. authentik grants every requested scope that has a mapping on the provider; only an application policy can stop it, and then the whole request fails (`400 invalid_grant`). TasmoFleet would have to ask for `read write` and fall back to `read`.
-- **`typ`:** authentik sets no `typ` claim; the header carries the default `JWT`. The check of PMSS for `typ == "Bearer"` rejects every authentik token.
+- **`typ`:** authentik sets no `typ` claim; the header carries the default `JWT`. PMSS therefore runs with `PMSS_OIDC_TYP_CHECK=none` for authentik; the `scope` claim keeps ID tokens out (design T-9).
 - **`azp`:** authentik sets `azp` to the client ID of the provider that issues the token, after an exchange with `audience` that is the Security Service, not TasmoFleet.
 - **Issuer:** built from the host name of each request (`issuer_mode: per_provider`); authentik has no fixed host name like `KC_HOSTNAME`. All clients have to get their tokens over the same URL.
 - **Not covered:** second factor and device code (F-7) need a browser, see [SECOND-FACTOR.md](SECOND-FACTOR.md); the minimum version (F-8) needs runs with older tags.

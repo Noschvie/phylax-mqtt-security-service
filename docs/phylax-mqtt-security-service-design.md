@@ -2427,8 +2427,8 @@ Grundlage für Phase 7.
 -   [ ] Integrationstest-Umgebung (`test/integration/`) mit
     Keycloak-Dev-Container (`KC_HOSTNAME`), Test-Realm-JSON und
     Mosquitto (mit `legacy-shared-user`) aufbauen.
--   [ ] Probe authentik (`test/integration/authentik`) mit Blueprint;
-    später als eigener Job in `integration.yml`.
+-   [x] Probe authentik (`test/integration/authentik`) mit Blueprint;
+    als eigener Job in `integration.yml`.
 -   [ ] Dockerfile (Multi-Stage, `golang:1.27-trixie` →
     `debian:trixie-slim`, Nicht-Root, `ca-certificates`, `tzdata`)
     erstellen und lokal testen.
@@ -2658,15 +2658,15 @@ verwendet. Die Begründungen stehen in den jeweiligen Abschnitten.
 -   [ ] Produktiv: Schlüsselabruf über das interne Netz
     (`PMSS_OIDC_JWKS_URL`) oder über die öffentliche URL; dafür das
     gemeinsame Netz mit dem Provider festlegen (Abschnitte 4.2, 7.5).
--   [ ] `PMSS_OIDC_TYP_CHECK` und die Pflicht für das `scope`-Claim im
-    Code umsetzen (T-9); bis dahin lehnt PMSS jedes authentik-Token ab.
--   [ ] Keycloak: prüfen, dass ID-Tokens kein `scope`-Claim tragen
-    (Grundlage für T-9).
+-   [x] `PMSS_OIDC_TYP_CHECK` und die Pflicht für das `scope`-Claim im
+    Code umsetzen (T-9).
+-   [x] Keycloak: prüfen, dass ID-Tokens kein `scope`-Claim tragen
+    (Grundlage für T-9; `test/integration/keycloak/check_tokens.py`).
 -   [ ] Zweiter Faktor manuell testen: Keycloak
     (`test/integration/keycloak/SECOND-FACTOR.md`); authentik (F-7)
     zurückgestellt, bis eine authentik-Instanz bereitsteht.
--   [ ] authentik-Probe als eigener Job in `integration.yml`, zunächst
-    ohne Einfluss auf den Image-Build.
+-   [x] authentik-Probe als eigener Job in `integration.yml`; Teil des
+    Release-Gates vor dem Image-Build.
 -   [ ] Vor der TasmoFleet-Ausbaustufe: Zwischen-CA unter der App-CA mit
     CRL oder eigene TasmoFleet-CA (Abschnitt 5.4). Bei der Zwischen-CA
     `nameConstraints` und das Verhalten bei abgelaufener CRL testen.
