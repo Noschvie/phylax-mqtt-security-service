@@ -206,12 +206,13 @@ func newAuthorizer(cfg config.OIDC, logger *slog.Logger) (auth.Authorizer, error
 		Audience:           cfg.Audience,
 		JWKSURL:            cfg.JWKSURL,
 		MinRefreshInterval: cfg.JWKSMinRefresh,
+		TypCheck:           cfg.TypCheck,
 	})
 	if err != nil {
 		return nil, err
 	}
 	logger.Info("token check configured", "issuer", cfg.Issuer, "audience", cfg.Audience,
-		"scope_read", cfg.ScopeRead, "scope_write", cfg.ScopeWrite)
+		"scope_read", cfg.ScopeRead, "scope_write", cfg.ScopeWrite, "typ_check", cfg.TypCheck)
 	return &auth.Bearer{
 		Verifier:   v,
 		ScopeNames: map[auth.Scope]string{auth.ScopeRead: cfg.ScopeRead, auth.ScopeWrite: cfg.ScopeWrite},

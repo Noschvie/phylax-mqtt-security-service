@@ -17,10 +17,21 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 )
 
-// VerifierConfig of the token check (design 7.5, T-7).
+// Token type checks (design T-9).
+const (
+	// TypCheckBearer requires the claim typ = "Bearer" (Keycloak): ID and
+	// refresh tokens are rejected.
+	TypCheckBearer = "bearer"
+	// TypCheckNone checks no typ (authentik sets no typ claim). Audience
+	// and the scope claim keep ID tokens out.
+	TypCheckNone = "none"
+)
+
+// VerifierConfig of the token check (design 7.5, T-7 to T-9).
 type VerifierConfig struct {
-	// Issuer is the Keycloak realm URL, e.g.
-	// https://kc.example.org/realms/pmss. iss must match exactly.
+	// Issuer is the fixed issuer of the OIDC provider, e.g. a Keycloak
+	// realm URL or the issuer of an authentik provider. iss must match
+	// exactly.
 	Issuer string
 	// Audience must be contained in aud.
 	Audience string
@@ -35,24 +46,38 @@ type VerifierConfig struct {
 	MinRefreshInterval time.Duration
 	// HTTPClient for discovery and JWKS; default 10 s timeout.
 	HTTPClient *http.Client
+	// TypCheck is TypCheckBearer (default when empty) or TypCheckNone.
+	TypCheck string
 }
 
-// ErrNotAccessToken is returned for tokens whose typ claim is not "Bearer",
-// e.g. ID or refresh tokens of Keycloak.
+// ErrNotAccessToken is returned with TypCheckBearer for tokens whose typ
+// claim is not "Bearer", e.g. ID or refresh tokens of Keycloak.
 var ErrNotAccessToken = errors.New("token is not an access token (typ != Bearer)")
 
-// Verifier checks Keycloak access tokens with go-oidc plus the token type.
-// It needs no connection to Keycloak at start: discovery and JWKS are
-// fetched on the first token.
+// ErrNoScope is returned for tokens without a scope claim; only access
+// tokens carry one (specification 2.1, design T-9).
+var ErrNoScope = errors.New("token without scope claim")
+
+// Verifier checks access tokens of the OIDC provider with go-oidc plus the
+// scope claim and, if configured, the token type. It needs no connection to
+// the provider at start: discovery and JWKS are fetched on the first token.
 type Verifier struct {
-	v    *oidc.IDTokenVerifier
-	Keys *ThrottledKeySet
+	v        *oidc.IDTokenVerifier
+	Keys     *ThrottledKeySet
+	typCheck string
 }
 
 // NewVerifier builds the verifier; it does not contact the issuer.
 func NewVerifier(cfg VerifierConfig) (*Verifier, error) {
 	if cfg.Issuer == "" || cfg.Audience == "" {
 		return nil, errors.New("issuer and audience are required")
+	}
+	typCheck := cfg.TypCheck
+	if typCheck == "" {
+		typCheck = TypCheckBearer
+	}
+	if typCheck != TypCheckBearer && typCheck != TypCheckNone {
+		return nil, fmt.Errorf("typ check %q: want %q or %q", cfg.TypCheck, TypCheckBearer, TypCheckNone)
 	}
 	algs := cfg.Algorithms
 	if len(algs) == 0 {
@@ -82,7 +107,8 @@ func NewVerifier(cfg VerifierConfig) (*Verifier, error) {
 			ClientID:             cfg.Audience, // checked as "aud contains"
 			SupportedSigningAlgs: algs,
 		}),
-		Keys: ks,
+		Keys:     ks,
+		typCheck: typCheck,
 	}, nil
 }
 
@@ -93,21 +119,24 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (Caller, error) {
 		return Caller{}, err
 	}
 	var c struct {
-		Typ               string `json:"typ"`
-		Scope             string `json:"scope"`
-		PreferredUsername string `json:"preferred_username"`
-		Azp               string `json:"azp"`
+		Typ               string  `json:"typ"`
+		Scope             *string `json:"scope"`
+		PreferredUsername string  `json:"preferred_username"`
+		Azp               string  `json:"azp"`
 	}
 	if err := tok.Claims(&c); err != nil {
 		return Caller{}, err
 	}
-	if c.Typ != "Bearer" {
+	if v.typCheck == TypCheckBearer && c.Typ != "Bearer" {
 		return Caller{}, ErrNotAccessToken
+	}
+	if c.Scope == nil {
+		return Caller{}, ErrNoScope
 	}
 	if tok.Subject == "" {
 		return Caller{}, errors.New("token without sub")
 	}
-	return Caller{Subject: tok.Subject, Username: c.PreferredUsername, Azp: c.Azp, Scopes: strings.Fields(c.Scope)}, nil
+	return Caller{Subject: tok.Subject, Username: c.PreferredUsername, Azp: c.Azp, Scopes: strings.Fields(*c.Scope)}, nil
 }
 
 // ThrottledKeySet is an oidc.KeySet that fetches the JWKS again for an

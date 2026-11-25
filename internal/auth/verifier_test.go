@@ -204,6 +204,7 @@ func TestVerifyRejected(t *testing.T) {
 		"ID token":        sign(t, k, is.claims(func(c map[string]any) { c["typ"] = "ID" })),
 		"refresh token":   sign(t, k, is.claims(func(c map[string]any) { c["typ"] = "Refresh" })),
 		"typ missing":     sign(t, k, is.claims(func(c map[string]any) { delete(c, "typ") })),
+		"scope missing":   sign(t, k, is.claims(func(c map[string]any) { delete(c, "scope") })),
 		"sub missing":     sign(t, k, is.claims(func(c map[string]any) { delete(c, "sub") })),
 		"other key":       sign(t, other, is.claims(nil)),
 		"payload changed": tampered(),
@@ -217,6 +218,69 @@ func TestVerifyRejected(t *testing.T) {
 	}
 	if _, err := v.Verify(context.Background(), sign(t, k, is.claims(func(c map[string]any) { c["typ"] = "ID" }))); !errors.Is(err, ErrNotAccessToken) {
 		t.Errorf("ID token: %v, want ErrNotAccessToken", err)
+	}
+}
+
+// authentik sets no typ claim; with TypCheckNone the scope claim and the
+// audience keep ID tokens out (design T-9).
+func TestVerifyTypCheckNone(t *testing.T) {
+	is := newIssuer(t)
+	k := rsaKey(t, "rsa-1")
+	is.publish(k)
+	v := newTestVerifier(t, is, VerifierConfig{TypCheck: TypCheckNone})
+
+	// Exchanged authentik token: no typ, azp is the service itself.
+	c, err := v.Verify(context.Background(), sign(t, k, is.claims(func(c map[string]any) {
+		delete(c, "typ")
+		c["aud"] = []string{audience}
+		c["azp"] = audience
+	})))
+	if err != nil {
+		t.Fatalf("token without typ: %v", err)
+	}
+	if c.Username != "alice" || c.Azp != audience || !c.HasScope("write") {
+		t.Errorf("caller %+v", c)
+	}
+	// Empty scope: accepted as token, but without any scope.
+	c, err = v.Verify(context.Background(), sign(t, k, is.claims(func(c map[string]any) { c["scope"] = "" })))
+	if err != nil || c.HasScope("read") {
+		t.Errorf("empty scope: caller %+v, err %v", c, err)
+	}
+	// ID token: no scope claim.
+	if _, err := v.Verify(context.Background(), sign(t, k, is.claims(func(c map[string]any) {
+		delete(c, "typ")
+		delete(c, "scope")
+	}))); !errors.Is(err, ErrNoScope) {
+		t.Errorf("token without scope: %v, want ErrNoScope", err)
+	}
+	// Other checks stay.
+	if _, err := v.Verify(context.Background(), sign(t, k, is.claims(func(c map[string]any) {
+		delete(c, "typ")
+		c["aud"] = []string{"tasmofleet"}
+	}))); err == nil {
+		t.Error("token for another audience accepted")
+	}
+}
+
+func TestVerifyScopeRequiredWithBearer(t *testing.T) {
+	is := newIssuer(t)
+	k := rsaKey(t, "rsa-1")
+	is.publish(k)
+	v := newTestVerifier(t, is, VerifierConfig{TypCheck: TypCheckBearer})
+	if _, err := v.Verify(context.Background(), sign(t, k, is.claims(func(c map[string]any) { delete(c, "scope") }))); !errors.Is(err, ErrNoScope) {
+		t.Errorf("token without scope: %v, want ErrNoScope", err)
+	}
+}
+
+func TestNewVerifierTypCheck(t *testing.T) {
+	is := newIssuer(t)
+	for _, ok := range []string{"", TypCheckBearer, TypCheckNone} {
+		if _, err := NewVerifier(VerifierConfig{Issuer: is.srv.URL, Audience: audience, TypCheck: ok}); err != nil {
+			t.Errorf("typ check %q: %v", ok, err)
+		}
+	}
+	if _, err := NewVerifier(VerifierConfig{Issuer: is.srv.URL, Audience: audience, TypCheck: "Bearer"}); err == nil {
+		t.Error("typ check \"Bearer\" accepted")
 	}
 }
 

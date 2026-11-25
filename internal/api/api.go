@@ -21,7 +21,7 @@ import (
 )
 
 // APIVersion is the version of the specification implemented here.
-const APIVersion = "1.0"
+const APIVersion = "1.1"
 
 // ImplementationName is reported in GET /api/v1/info.
 const ImplementationName = "phylax-mqtt-security-service"

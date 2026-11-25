@@ -46,6 +46,7 @@ const (
 	EnvOIDCScopeWrite     = "PMSS_OIDC_SCOPE_WRITE"
 	EnvOIDCAllowHTTP      = "PMSS_OIDC_ALLOW_HTTP"
 	EnvOIDCJWKSMinRefresh = "PMSS_OIDC_JWKS_MIN_REFRESH"
+	EnvOIDCTypCheck       = "PMSS_OIDC_TYP_CHECK"
 )
 
 // MinRequestBytes is the smallest allowed body limit (specification S-11).
@@ -81,12 +82,13 @@ type Config struct {
 
 // OIDC holds the token check. Without Issuer the API refuses every request.
 type OIDC struct {
-	// Issuer is the Keycloak realm URL; iss must match exactly.
+	// Issuer is the fixed issuer of the OIDC provider (Keycloak realm URL,
+	// issuer of the authentik provider); iss must match exactly.
 	Issuer string
 	// Audience must be contained in aud (client ID of the service).
 	Audience string
 	// JWKSURL overrides jwks_uri from the discovery document, e.g. an
-	// internal address of Keycloak.
+	// internal address of the provider.
 	JWKSURL string
 	// ScopeRead and ScopeWrite are the scope names in the token.
 	ScopeRead  string
@@ -96,6 +98,9 @@ type OIDC struct {
 	// JWKSMinRefresh is the minimum time between two JWKS fetches for
 	// unknown key IDs (T-7).
 	JWKSMinRefresh time.Duration
+	// TypCheck is "bearer" (typ claim must be "Bearer", Keycloak) or
+	// "none" (no typ check, authentik); design T-9.
+	TypCheck string
 }
 
 // Managed holds the marks of managed objects. They are configurable so that
@@ -146,6 +151,7 @@ func Default() Config {
 			ScopeRead:      "read",
 			ScopeWrite:     "write",
 			JWKSMinRefresh: time.Minute,
+			TypCheck:       "bearer",
 		},
 		Managed: Managed{
 			RolePrefix:   "tf_",
@@ -266,6 +272,14 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		if err := checkOIDCURL(u.val, cfg.OIDC.AllowHTTP); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", u.env, err))
+		}
+	}
+	if v := get(EnvOIDCTypCheck); v != "" {
+		switch v {
+		case "bearer", "none":
+			cfg.OIDC.TypCheck = v
+		default:
+			errs = append(errs, fmt.Errorf("%s: bearer or none, got %q", EnvOIDCTypCheck, v))
 		}
 	}
 	if cfg.OIDC.ScopeRead == cfg.OIDC.ScopeWrite {
