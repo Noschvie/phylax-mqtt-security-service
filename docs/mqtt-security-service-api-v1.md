@@ -8,7 +8,7 @@
 **Referenz-Implementierung:** Phylax MQTT Security Service (PMSS), https://github.com/Noschvie/phylax-mqtt-security-service  
 **Maschinenlesbare Fassung:** `api/openapi.yaml` im PMSS-Repository (OpenAPI 3.2.1, Abschnitt 7.1)  
 **Broker:** Eclipse Mosquitto ab 2.1 mit Dynamic Security Plugin (DynSec)  
-**Identity Provider:** OIDC-Provider mit Token Exchange nach RFC 8693; getestet mit Keycloak 26.8.2 und authentik 2026.8.6 (Abschnitt 2.3)
+**Identity Provider:** OIDC-Provider mit Token Exchange nach RFC 8693; getestet mit Keycloak 26.8.2 und authentik 2026.8.6, mindestens Keycloak 26.2 bzw. authentik 2026.8.3 (Abschnitt 2.3)
 
 > **Zweck**
 > Dieses Dokument beschreibt, was TasmoFleet von einem externen MQTT Security Service erwartet und was es selbst tun muss. Es beantwortet Overview-Frage 16: TasmoFleet hängt nur von dieser Spezifikation ab, nicht von PMSS. PMSS ist eine Implementierung davon.
@@ -186,6 +186,7 @@ Konfiguration in TasmoFleet ✅ S-12:
 
 | Anforderung | Keycloak 26.8.2 | authentik 2026.8.6 |
 |---|---|---|
+| Mindestversion | 26.2 (Standard Token Exchange) | 2026.8.3 (Token Exchange ab 2026.8.0; 2026.8.3 behebt den Tausch ohne Signaturschlüssel) |
 | Token Exchange nach RFC 8693 mit `audience` = Security Service; `sub` bleibt der Benutzer | Standard Token Exchange, am TasmoFleet-Client aktiviert | Grant „Token exchange“ am TasmoFleet-Provider; der Provider des Security Service vertraut dem TasmoFleet-Provider (Federated OAuth2/OpenID Providers) |
 | Getauschtes Token: `aud` = Security Service, `iss` = fester Issuer | Issuer des Realms | Issuer des Providers des Security Service, z. B. `https://<authentik>/application/o/pmss/` |
 | Fester Issuer, unabhängig vom Zugriffsweg | `KC_HOSTNAME` = öffentliche URL | Issuer folgt dem Hostnamen der Anfrage: alle Aufrufer über dieselbe öffentliche URL, Reverse Proxy reicht `Host` bzw. `X-Forwarded-Host` durch |

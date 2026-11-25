@@ -5,7 +5,7 @@
 **Datum:** 25. November 2026\
 **Zielumgebung:** Mosquitto in [IOTstack](https://github.com/SensorsIot/IOTstack) (Docker Compose)\
 **Broker:** Eclipse Mosquitto ab 2.1, getestet mit 2.1.2\
-**Identity Provider:** OIDC-Provider mit Token Exchange nach RFC 8693; getestet mit Keycloak 26.8.2 und authentik 2026.8.6\
+**Identity Provider:** OIDC-Provider mit Token Exchange nach RFC 8693; getestet mit Keycloak 26.8.2 und authentik 2026.8.6, mindestens Keycloak 26.2 bzw. authentik 2026.8.3\
 **Implementierungssprache:** Go\
 **Projektname:** Phylax MQTT Security Service\
 **GitHub-Repository:** [`Noschvie/phylax-mqtt-security-service`](https://github.com/Noschvie/phylax-mqtt-security-service)\
@@ -1695,6 +1695,9 @@ Woher die Tokens kommen:
 
 **authentik** (über Blueprints):
 
+-   Mindestversion 2026.8.3: Token Exchange gibt es ab 2026.8.0 und
+    muss am Provider unter „Grant Types“ eingeschaltet werden; 2026.8.3
+    behebt den Tausch ohne Signaturschlüssel. Getestet mit 2026.8.6.
 -   Eigener OAuth2-Provider mit eigener Application für den Security
     Service, Client-ID = Audience des Security Service; eigenes
     Signier-Schlüsselpaar (RS256). Der Issuer ist der des Providers.
@@ -2662,8 +2665,6 @@ verwendet. Die Begründungen stehen in den jeweiligen Abschnitten.
 -   [ ] Zweiter Faktor manuell testen: Keycloak
     (`test/integration/keycloak/SECOND-FACTOR.md`); authentik (F-7)
     zurückgestellt, bis eine authentik-Instanz bereitsteht.
--   [ ] authentik: Mindestversion für den Token Exchange (F-8) mit
-    älteren Versionen der Probe ermitteln.
 -   [ ] authentik-Probe als eigener Job in `integration.yml`, zunächst
     ohne Einfluss auf den Image-Build.
 -   [ ] Vor der TasmoFleet-Ausbaustufe: Zwischen-CA unter der App-CA mit

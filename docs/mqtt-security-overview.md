@@ -6,7 +6,7 @@
 **Datum:** 25. November 2026  
 **Detaildokument:** `phylax-mqtt-security-service-design` (aktuelle Fassung)  
 **Schnittstellenspezifikation:** `mqtt-security-service-api-v1` („MQTT Security Service API v1“, aktuelle Fassung)  
-**Identity Provider:** OIDC-Provider mit Token Exchange; getestet mit Keycloak 26.8.2 und authentik 2026.8.6
+**Identity Provider:** OIDC-Provider mit Token Exchange; getestet mit Keycloak 26.8.2 und authentik 2026.8.6, mindestens Keycloak 26.2 bzw. authentik 2026.8.3
 
 > **Hinweis zu Namen und Umgebung**
 > Das Dokument beschreibt die Architektur allgemein. Namen von Hosts, Benutzern und Domains sind Platzhalter: `legacy-shared-user` für den gemeinsamen Bestandsbenutzer, `mqtt.example.org` für den Broker-Namen der TLS-Listener. Die Angaben zur konkreten Umgebung (Hosts, Pfade, Netze, Inventar, Migrationsstand) stehen in einem getrennten, nicht öffentlichen Betriebsdokument.
@@ -407,6 +407,7 @@ In Produktion hat kein Service-Account den Scope `write`, denn ein Service-Accou
 | `azp` im getauschten Token | TasmoFleet | PMSS |
 | Token Exchange | Standard Token Exchange am TasmoFleet-Client | Grant „Token exchange“, PMSS-Provider vertraut dem TasmoFleet-Provider |
 | Konfiguration als Code | Realm-JSON | Blueprint |
+| Mindestversion | 26.2 | 2026.8.3 |
 
 **Abhängigkeit vom Provider:** Ist der Provider nicht erreichbar, können keine neuen Tokens ausgestellt und damit keine Berechtigungen geändert werden. Bereits ausgestellte, gültige Tokens prüft PMSS weiter mit den gecachten JWKS-Schlüsseln. Geräte sind nicht betroffen. Für den Notfall bleibt `mosquitto_ctrl` mit dem Zertifikat `pmss-breakglass-admin` (Break-glass, überwacht; D-24).
 
@@ -604,7 +605,7 @@ Vorlage für die DynSec-Befehle: PMSS 6.2 und `testbroker-dynsec/dynsec-setup.tx
     - Eigene TasmoFleet-CA: im Notfall aus `cafile` entfernen und neu starten (SIGHUP reicht nicht); erfordert zwei vertrauenswürdige CAs an 8885.
     - Zwischen-CA: Einzelne Zertifikate per CRL sperrbar; CRLs aller ausstellenden CAs müssen gepflegt werden. `nameConstraints` noch zu prüfen.
     - Vergleich im PMSS-Dokument, Abschnitt 5.4.
-31. ~~**Identity Provider: nur Keycloak oder auch authentik?**~~ ✅ **Entschieden (24.11.2026):** Beide, weil TasmoFleet den Login mit Keycloak und mit authentik unterstützt. PMSS und die Spezifikation hängen von keinem bestimmten Provider ab (D-55, Spezifikation S-15); die Unterschiede regeln Spezifikation S-16/S-17 und PMSS T-8/T-9. Offen: zweiter Faktor mit authentik (App-Passwörter) und Mindestversion von authentik.
+31. ~~**Identity Provider: nur Keycloak oder auch authentik?**~~ ✅ **Entschieden (24.11.2026):** Beide, weil TasmoFleet den Login mit Keycloak und mit authentik unterstützt. PMSS und die Spezifikation hängen von keinem bestimmten Provider ab (D-55, Spezifikation S-15); die Unterschiede regeln Spezifikation S-16/S-17 und PMSS T-8/T-9. Mindestversion authentik 2026.8.3 (Token Exchange ab 2026.8.0). Offen: zweiter Faktor mit authentik (App-Passwörter).
 
 ## 11. Architekturentscheidungen
 
