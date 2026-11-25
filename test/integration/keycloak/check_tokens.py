@@ -115,6 +115,16 @@ check("original TasmoFleet token (alice): aud does not contain the Security Serv
 st, r = user_token("bob")
 bob = r.get("access_token")
 
+# ID token without scope claim: PMSS tells access and ID tokens apart by the
+# scope claim as well as by typ (design T-9, PMSS_OIDC_TYP_CHECK).
+st, r = user_token("alice", scope="openid read write")
+idt = claims(r["id_token"]) if st == 200 and r.get("id_token") else {}
+at = claims(r["access_token"]) if st == 200 else {}
+check("ID token (alice, openid read write): no scope claim, typ ID; access token has scope",
+      bool(idt) and "scope" not in idt and idt.get("typ") == "ID" and at.get("typ") == "Bearer" and "scope" in at,
+      f"HTTP {st}: id token typ={idt.get('typ')} claims={sorted(idt)}; access token scope='{at.get('scope')}'"
+      if idt else f"HTTP {st}: {r}")
+
 # --- Standard Token Exchange --------------------------------------------
 st, r = exchange(alice)
 c = claims(r["access_token"]) if st == 200 else {}
