@@ -1,5 +1,5 @@
-# authentik for the identity provider probe (docs: pmss-authentik-plan,
-# step 1). Test only: fixed secrets, HTTP, admin user for inspection.
+# authentik for the identity provider probe (README.md in this folder).
+# Test only: fixed secrets, HTTP, admin user for inspection.
 #
 #   ./make-keys.sh
 #   docker compose up -d
