@@ -1,0 +1,98 @@
+name: Maintenance
+
+# Checks that Dependabot (.github/dependabot.yml) does not cover
+# (design 7.7, 7.8):
+#
+#   go-version   go.mod and Dockerfile use the same Go minor version, and
+#                it is the current one. A new minor version (e.g. 1.28)
+#                lets the job fail; the switch is made on purpose in
+#                go.mod and Dockerfile.
+#   govulncheck  Known vulnerabilities in the Go modules and the standard
+#                library, checked with the newest patch release of the Go
+#                minor version that the image is built with.
+#
+# A failed scheduled run is the notification.
+
+on:
+  schedule:
+    - cron: "43 4 * * 1" # Monday 04:43 UTC, after the weekly rebuild
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/maintenance.yml
+      - .github/dependabot.yml
+      - go.mod
+      - go.sum
+      - Dockerfile
+
+permissions:
+  contents: read
+
+jobs:
+  go-version:
+    runs-on: ubuntu-latest
+    outputs:
+      minor: ${{ steps.v.outputs.dockerfile }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Go versions of go.mod, Dockerfile and go.dev
+        run: |
+          set -euo pipefail
+          # go 1.27.0 → 1.27
+          gomod=$(awk '$1 == "go" { split($2, v, "."); print v[1] "." v[2]; exit }' go.mod)
+          # FROM … golang:1.27-trixie AS build → 1.27
+          dockerfile=$(sed -nE 's/^FROM .*golang:([0-9]+\.[0-9]+)[-.@ ].*/\1/p' Dockerfile | head -n 1)
+          # Newest stable release, e.g. go1.27.3 → 1.27
+          latest_full=$(curl -fsSL 'https://go.dev/dl/?mode=json' | jq -r '[.[] | select(.stable)][0].version')
+          latest=$(echo "${latest_full#go}" | cut -d. -f1,2)
+
+          echo "dockerfile=$dockerfile" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Go versions"
+            echo
+            echo "| Source | Version |"
+            echo "|---|---|"
+            echo "| \`go.mod\` (go directive) | $gomod |"
+            echo "| \`Dockerfile\` (golang image) | $dockerfile |"
+            echo "| go.dev, newest stable | ${latest_full#go} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for v in "$gomod" "$dockerfile" "$latest"; do
+            if ! [[ "$v" =~ ^[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Could not read a Go version (go.mod: '$gomod', Dockerfile: '$dockerfile', go.dev: '$latest_full')"
+              exit 1
+            fi
+          done
+
+          rc=0
+          if [ "$gomod" != "$dockerfile" ]; then
+            echo "::error file=go.mod::go.mod uses Go $gomod, the Dockerfile golang:$dockerfile – change both together"
+            rc=1
+          fi
+          if [ "$(printf '%s\n%s\n' "$dockerfile" "$latest" | sort -V | tail -n 1)" != "$dockerfile" ]; then
+            echo "::error file=Dockerfile::Go $latest is released (${latest_full}); the image still uses Go $dockerfile – switch go.mod and Dockerfile"
+            rc=1
+          fi
+          [ "$rc" = 0 ] && echo "Go $dockerfile is current (newest: ${latest_full#go})"
+          exit "$rc"
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    # Also runs when go-version fails, as long as it read the version.
+    needs: go-version
+    if: ${{ !cancelled() && needs.go-version.outputs.minor != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # Newest patch release, like golang:<minor>-trixie in the image.
+          go-version: ${{ needs.go-version.outputs.minor }}.x
+          check-latest: true
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: govulncheck
+        run: |
+          go version
+          govulncheck -version
+          govulncheck ./...
