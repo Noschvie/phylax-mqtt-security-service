@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1530" viewBox="0 0 1400 1530" role="img" aria-labelledby="title description">
+  <title id="title">MQTT security architecture: components and communication paths</title>
+  <desc id="description">Target architecture with browser, OIDC provider, TasmoFleet, Nginx Proxy Manager, Phylax MQTT Security Service, Mosquitto and MQTT clients. Numbered arrows show OIDC login, token exchange, JWKS, the HTTPS API, administrative MQTT access, TasmoFleet as a normal MQTT client, and device and application access.</desc>
+  <defs>
+    <marker id="identity-arrow" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#6941a5"/>
+    </marker>
+    <marker id="api-arrow" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#2463a5"/>
+    </marker>
+    <marker id="mqtt-arrow" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#08786b"/>
+    </marker>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172f49; }
+      .heading { font-size: 32px; font-weight: 700; }
+      .subtitle { font-size: 21px; fill: #52677d; }
+      .box { fill: #ffffff; stroke: #cbd6e2; stroke-width: 2; }
+      .box-title { font-size: 27px; font-weight: 700; }
+      .box-title-small { font-size: 25px; font-weight: 700; }
+      .box-title-client { font-size: 23px; font-weight: 700; }
+      .section { font-size: 22px; font-weight: 600; }
+      .body { font-size: 22px; }
+      .body-small { font-size: 20px; }
+      .edge-label { font-size: 21px; font-weight: 600; }
+      .edge-detail { font-size: 20px; }
+      .edge-detail-small { font-size: 19px; }
+      .identity { fill: none; stroke: #6941a5; stroke-width: 3; }
+      .api { fill: none; stroke: #2463a5; stroke-width: 3; }
+      .mqtt { fill: none; stroke: #08786b; stroke-width: 3; }
+    </style>
+  </defs>
+
+  <rect x="1" y="1" width="1398" height="1528" rx="24" fill="#f7f9fc" stroke="#d7e0ea" stroke-width="2"/>
+  <text x="45" y="61" class="heading">MQTT security architecture</text>
+  <text x="45" y="94" class="subtitle">Target architecture: components and communication paths</text>
+
+  <path class="identity" d="M410 210 H840" marker-end="url(#identity-arrow)"/>
+  <path class="identity" d="M225 280 V420" marker-end="url(#identity-arrow)"/>
+  <path class="identity" d="M500 420 V335 H785 V275 H840" marker-end="url(#identity-arrow)"/>
+  <path class="identity" d="M1280 275 H1345 V810 H1280" marker-end="url(#identity-arrow)"/>
+  <path class="api" d="M650 520 H840" marker-end="url(#api-arrow)"/>
+  <path class="api" d="M1060 575 V715" marker-end="url(#api-arrow)"/>
+  <path class="mqtt" d="M1060 905 V1055" marker-end="url(#mqtt-arrow)"/>
+  <path class="mqtt" d="M200 670 V1110 H840" marker-end="url(#mqtt-arrow)"/>
+  <path class="mqtt" d="M1060 1390 V1165" marker-end="url(#mqtt-arrow)"/>
+
+  <rect class="box" x="45" y="135" width="365" height="145" rx="15"/>
+  <rect x="45" y="135" width="8" height="145" rx="4" fill="#6941a5"/>
+  <text x="72" y="184" class="box-title">Browser</text>
+  <text x="72" y="224" class="body">security-admin</text>
+
+  <rect class="box" x="840" y="135" width="440" height="210" rx="15"/>
+  <rect x="840" y="135" width="8" height="210" rx="4" fill="#6941a5"/>
+  <text x="867" y="179" class="box-title">OIDC provider</text>
+  <text x="867" y="210" class="body">Keycloak · authentik</text>
+  <text x="867" y="253" class="body-small">operator · admin · security-admin</text>
+  <text x="867" y="283" class="body-small">Scopes: read · write</text>
+  <text x="867" y="313" class="body-small">2nd factor for security-admin</text>
+
+  <rect class="box" x="45" y="420" width="605" height="250" rx="15"/>
+  <rect x="45" y="420" width="8" height="250" rx="4" fill="#2463a5"/>
+  <text x="72" y="466" class="box-title">TasmoFleet</text>
+  <text x="72" y="504" class="section">Security Manager</text>
+  <text x="72" y="536" class="body">Target state · diff · approval</text>
+  <text x="72" y="565" class="body">Drift report · approval audit</text>
+  <text x="72" y="600" class="section">Security service client</text>
+  <text x="72" y="632" class="body">Token · ETag / If-Match</text>
+
+  <rect class="box" x="840" y="455" width="440" height="120" rx="15"/>
+  <rect x="840" y="455" width="8" height="120" rx="4" fill="#2463a5"/>
+  <text x="867" y="500" class="box-title-small">Nginx Proxy Manager</text>
+  <text x="867" y="540" class="body">NPM · TLS termination</text>
+
+  <rect class="box" x="840" y="715" width="440" height="190" rx="15"/>
+  <rect x="840" y="715" width="8" height="190" rx="4" fill="#2463a5"/>
+  <text x="867" y="758" class="box-title-small">Phylax MQTT Security Service</text>
+  <text x="867" y="790" class="body-small">Go / net/http · REST API · Debian Slim</text>
+  <text x="867" y="827" class="body-small">Token check · validation · ETag</text>
+  <text x="867" y="860" class="body-small">Compensation · audit log</text>
+
+  <rect class="box" x="840" y="1055" width="440" height="110" rx="15"/>
+  <rect x="840" y="1055" width="8" height="110" rx="4" fill="#08786b"/>
+  <text x="867" y="1099" class="box-title-small">Mosquitto 2.1 · Dynamic Security</text>
+  <text x="867" y="1135" class="body-small">MQTT broker · DynSec Control API</text>
+
+  <rect class="box" x="840" y="1390" width="440" height="100" rx="15"/>
+  <rect x="840" y="1390" width="8" height="100" rx="4" fill="#08786b"/>
+  <text x="867" y="1432" class="box-title-client">Tasmota devices and applications</text>
+  <text x="867" y="1465" class="body-small">MQTT clients</text>
+
+  <text x="625" y="191" text-anchor="middle" class="edge-label">(1) OIDC login</text>
+  <text x="245" y="360" class="edge-detail">User interface</text>
+  <text x="615" y="319" text-anchor="middle" class="edge-label">(2) Token exchange</text>
+  <rect x="1289" y="397" width="107" height="38" rx="8" fill="#f7f9fc"/>
+  <text x="1342" y="423" text-anchor="middle" class="edge-detail-small">(3) JWKS</text>
+  <text x="745" y="480" text-anchor="middle" class="edge-label">(4) HTTPS :443</text>
+  <text x="745" y="505" text-anchor="middle" class="edge-detail-small">Bearer token · JSON</text>
+  <text x="1080" y="634" class="edge-detail">HTTP</text>
+  <text x="1080" y="661" class="edge-detail">internal proxy network</text>
+  <text x="1080" y="942" class="edge-detail">(5) MQTT 5 · mTLS :8884</text>
+  <text x="1080" y="970" class="edge-detail">Admin certificate</text>
+  <text x="1080" y="998" class="edge-detail-small">$CONTROL/dynamic-security/v1</text>
+  <text x="1080" y="1026" class="edge-detail">internal Docker network</text>
+  <text x="225" y="806" class="edge-label">(6) MQTT as a normal client</text>
+  <text x="225" y="836" class="edge-detail">:1883 / :8883</text>
+  <text x="225" y="866" class="edge-detail">Backlog to devices via the broker</text>
+  <text x="1080" y="1210" class="edge-label">(7) MQTT access</text>
+  <text x="1080" y="1242" class="edge-detail">:1883 Password (no TLS)</text>
+  <text x="1080" y="1272" class="edge-detail">:8883 TLS + password</text>
+  <text x="1080" y="1302" class="edge-detail">:8885 App certificate</text>
+</svg>
