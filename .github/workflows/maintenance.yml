@@ -34,7 +34,7 @@ jobs:
     outputs:
       minor: ${{ steps.v.outputs.dockerfile }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: v
         name: Go versions of go.mod, Dockerfile and go.dev
         run: |
@@ -83,8 +83,8 @@ jobs:
     needs: go-version
     if: ${{ !cancelled() && needs.go-version.outputs.minor != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           # Newest patch release, like golang:<minor>-trixie in the image.
           go-version: ${{ needs.go-version.outputs.minor }}.x
