@@ -2,7 +2,7 @@ name: Integration
 
 # Integration tests of design 7.9 in one compose environment
 # (test/integration/compose.yaml): Keycloak 26.8.2 with the test realm,
-# Mosquitto 2.1.2 with Dynamic Security and the service built from this
+# Mosquitto 2.1.4 with Dynamic Security and the service built from this
 # commit. Covers the tokens of Keycloak, the broker connection and the
 # whole path token → REST → MQTT/mTLS → DynSec.
 #
@@ -36,12 +36,20 @@ jobs:
       PMSS_TEST_BROKER_PLAIN: 127.0.0.1:18883
       PMSS_TEST_E2E_URL: http://127.0.0.1:18080
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-go@v5
+      # Newest patch release of the Go minor version of the image
+      # (golang:<minor>-trixie); maintenance.yml checks that go.mod uses
+      # the same minor version.
+      - id: go
+        name: Go version of the image
+        working-directory: .
+        run: echo "version=$(sed -nE 's/^FROM .*golang:([0-9]+\.[0-9]+)[-.@ ].*/\1/p' Dockerfile | head -n 1).x" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.go.outputs.version }}
+          check-latest: true
       - name: Test PKI and DynSec state
         working-directory: test/integration/broker
         run: ./make-certs.sh
@@ -74,7 +82,7 @@ jobs:
           PMSS_TEST_RECORD_DIR=$RUNNER_TEMP/records \
             go test -race -count=1 -p 1 -v \
               ./internal/... ./test/integration/e2e/
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: Responses of the real broker and service against the OpenAPI document
@@ -93,7 +101,7 @@ jobs:
         run: |
           mkdir -p logs
           for s in keycloak mosquitto pmss; do docker compose logs "$s" > "logs/$s.log" 2>&1; done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: integration-logs
@@ -109,7 +117,7 @@ jobs:
       run:
         working-directory: test/integration/authentik
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
       - name: Signing key of the test providers
@@ -124,7 +132,7 @@ jobs:
         run: |
           mkdir -p logs
           for s in postgresql server worker; do docker compose logs "$s" > "logs/$s.log" 2>&1; done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: authentik-probe-logs
