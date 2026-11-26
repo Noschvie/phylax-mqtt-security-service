@@ -36,7 +36,7 @@ jobs:
       PMSS_TEST_BROKER_PLAIN: 127.0.0.1:18883
       PMSS_TEST_E2E_URL: http://127.0.0.1:18080
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
       # Newest patch release of the Go minor version of the image
@@ -46,7 +46,7 @@ jobs:
         name: Go version of the image
         working-directory: .
         run: echo "version=$(sed -nE 's/^FROM .*golang:([0-9]+\.[0-9]+)[-.@ ].*/\1/p' Dockerfile | head -n 1).x" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ steps.go.outputs.version }}
           check-latest: true
@@ -82,7 +82,7 @@ jobs:
           PMSS_TEST_RECORD_DIR=$RUNNER_TEMP/records \
             go test -race -count=1 -p 1 -v \
               ./internal/... ./test/integration/e2e/
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: Responses of the real broker and service against the OpenAPI document
@@ -101,7 +101,7 @@ jobs:
         run: |
           mkdir -p logs
           for s in keycloak mosquitto pmss; do docker compose logs "$s" > "logs/$s.log" 2>&1; done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: integration-logs
@@ -117,7 +117,7 @@ jobs:
       run:
         working-directory: test/integration/authentik
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
       - name: Signing key of the test providers
@@ -132,7 +132,7 @@ jobs:
         run: |
           mkdir -p logs
           for s in postgresql server worker; do docker compose logs "$s" > "logs/$s.log" 2>&1; done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: authentik-probe-logs
