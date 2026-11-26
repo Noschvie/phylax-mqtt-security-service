@@ -4,8 +4,8 @@
 **Version:** 1.1\
 **Date:** November 25, 2026\
 **Target environment:** Mosquitto in [IOTstack](https://github.com/SensorsIot/IOTstack) (Docker Compose)\
-**Broker:** Eclipse Mosquitto 2.1 or later, tested with 2.1.2\
-**Identity Provider:** OIDC provider with Token Exchange according to RFC 8693; tested with Keycloak 26.8.2 and authentik 2026.8.6, at least Keycloak 26.2 or authentik 2026.8.3\
+**Broker:** Eclipse Mosquitto 2.1 or later, tested with 2.1.2, integration tests and production with 2.1.4\
+**Identity Provider:** OIDC provider with token exchange according to RFC 8693; tested with Keycloak 26.8.2 and authentik 2026.8.6, at least Keycloak 26.2 or authentik 2026.8.3\
 **Implementation language:** Go\
 **Project name:** Phylax MQTT Security Service\
 **GitHub repository:** [`Noschvie/phylax-mqtt-security-service`](https://github.com/Noschvie/phylax-mqtt-security-service)\
@@ -27,7 +27,7 @@
 
 > **Names and environment note**
 > Host, user, and domain names are placeholders:
-> `legacy-shared-user` for the shared existing user,
+> `legacy-shared-user` for the existing shared user,
 > `mqtt.example.org` for the broker name used by the TLS listeners, “Broker host”
 > for the machine on which IOTstack runs. Details for a specific
 > installation are provided in a separate operations document.
@@ -78,7 +78,7 @@ The starting point is Mosquitto as a Docker container in IOTstack:
 | Mosquitto configuration | `volumes/mosquitto/config/mosquitto.conf` |
 | Persistent data | `volumes/mosquitto/data` |
 | Password file | `volumes/mosquitto/pwfile/pwfile` |
-| MQTT user | one shared existing user, here `legacy-shared-user` |
+| MQTT user | one existing shared user, here `legacy-shared-user` |
 | Listener | TCP 1883 |
 | Anonymous connections | disabled (`allow_anonymous false`) |
 | ACL file | optional, often not active |
@@ -131,30 +131,29 @@ existing password therefore remains valid (tested on 20.11.2026 with Mosquitto
 ### 3.2 Communication paths
 
 ``` text
-Externe Admin-Clients / Anwendungen
+External admin clients / applications
                 |
                 | HTTPS :443
                 v
        Nginx Proxy Manager
                 |
-                | internes Proxy-Netz (HTTP)
+                | internal proxy network (HTTP)
                 v
    Phylax MQTT Security Service
      Go / net/http REST API
-     Debian-Slim-Container
+     Debian slim container
                 |
                 | MQTT 5 over TLS + mTLS
                 | (Eclipse Paho Go, crypto/tls)
-                | internes Docker-Netz, Port 8884
-                | Anmeldung nur per Admin-Zertifikat (CN = pmss-admin)
+                | internal Docker network, port 8884
+                | login only with admin certificate (CN = pmss-admin)
                 v
           Mosquitto Broker
           DynSec Plugin
                 |
-                +---- Geräte ohne TLS ........... :1883 (Passwort)
-                +---- Geräte/Anwendungen mit TLS  :8883 (TLS + Passwort)
-                +---- Anwendungen „TLS erforderlich“
-                                                  :8885 (nur App-Zertifikat)
+                +---- Devices without TLS ............. :1883 (password)
+                +---- Devices/applications with TLS     :8883 (TLS + password)
+                +---- Applications "TLS required" ..... :8885 (app certificate only)
 ```
 
 The REST API and the MQTT Control API are two different
@@ -372,9 +371,9 @@ clientCert, _ := tls.LoadX509KeyPair(
 )
 
 tlsCfg := &tls.Config{
-    RootCAs:      pool,              // nur Server-CA
+    RootCAs:      pool,              // Server CA only
     Certificates: []tls.Certificate{clientCert},
-    ServerName:   "mosquitto",       // SAN-Prüfung
+    ServerName:   "mosquitto",       // SAN check
     MinVersion:   tls.VersionTLS12,
 }
 ```
@@ -407,7 +406,7 @@ This means (tested on 20.11.2026 with Mosquitto 2.1.2 and
 
 The service sets neither username nor password in CONNECT.
 
-**Disable an admin:** An admin certificate is disabled through DynSec,
+**Block an admin:** An admin certificate is blocked through DynSec,
 using `deleteClient` (or by revoking all roles). An
 existing connection is disconnected (“administrative action”),
 and a new login with this certificate no longer has permissions. A
@@ -457,17 +456,17 @@ IOTstack/
             ├── pmss-admin.crt         # Admin-CA, CN=pmss-admin
             └── pmss-admin.key
 
-Außerhalb von IOTstack, offline gesichert:
+Outside IOTstack, backed up offline:
     internal-ca/
     ├── server-ca/
     │   ├── ca.crt
-    │   └── ca.key                     # nie in einen Container eingebunden
+    │   └── ca.key                     # never mounted into a container
     ├── admin-ca/
     │   ├── ca.crt
-    │   └── ca.key                     # nie in einen Container eingebunden
+    │   └── ca.key                     # never mounted into a container
     ├── app-ca/
     │   ├── ca.crt
-    │   └── ca.key                     # nie in einen Container eingebunden
+    │   └── ca.key                     # never mounted into a container
     └── breakglass/
         ├── pmss-breakglass-admin.crt  # Admin-CA, CN=pmss-breakglass-admin
         └── pmss-breakglass-admin.key  # mounted only for emergency use
@@ -618,7 +617,7 @@ Consequences for this later development stage:
 | Operation | `crlfile` needs CRLs from the App CA **and** intermediate CA, re-signed regularly; TasmoFleet must deliver its CRL to the broker | No CRL operations |
 | To check | Restrict intermediate CA `nameConstraints` to its own `O=` so a stolen key can issue only TasmoFleet subjects | Both CAs issue `O=mqtt-apps`; a stolen TasmoFleet key can also impersonate App CA subjects until the CA is removed |
 
-**Disabling** an app certificate is done as with admins, using `deleteClient`
+**Blocking** an app certificate is done as with admins, using `deleteClient`
 or revoking roles, not with `disableClient` (Section 5.2).
 Through the REST API, this is done with `DELETE /api/v1/clients/{username}`;
 `enable`/`disable` are rejected for certificate clients (A-10,
@@ -679,7 +678,7 @@ Procedure (successfully tested on 20.11.2026 with Mosquitto 2.1.2):
     ``` bash
     docker run --rm -it --network none \
       -v ~/IOTstack/volumes/mosquitto/data:/mosquitto/data \
-      eclipse-mosquitto:2.1.2 \
+      eclipse-mosquitto:2.1.4 \
       mosquitto_ctrl dynsec init /mosquitto/data/dynamic-security.json \
       dynsec-bootstrap
     ```
@@ -1011,7 +1010,7 @@ Responsibilities:
     drift report, and backup in TasmoFleet).
 -   Handle passwords and private keys securely.
 
-Not the Security Service's responsibility: desired state,
+Not the Security Service's responsibility: target state,
 diff, approval, drift report, and backup before applying. The
 service stores no state (read-only filesystem, no
 database, no access to `dynamic-security.json`); these tasks
@@ -1021,14 +1020,14 @@ Proposed package structure (non-binding):
 
 ``` text
 phylax-mqtt-security-service/
-├── cmd/phylax-mqtt-security-service/   # main: Konfiguration, Start, Graceful Shutdown
-├── internal/api/                # net/http-Handler, Routing, Validierung
-├── internal/auth/               # Bearer-Token-Prüfung (JWT, JWKS, Scopes)
-├── internal/dynsec/             # Kommando-/Antwort-Typen, Korrelation, Timeouts
-├── internal/mqttclient/         # Paho-Verbindung, TLS-Konfiguration, Reconnect
+├── cmd/phylax-mqtt-security-service/   # main: configuration, startup, graceful shutdown
+├── internal/api/                # net/http handlers, routing, validation
+├── internal/auth/               # bearer token check (JWT, JWKS, scopes)
+├── internal/dynsec/             # command/response types, correlation, timeouts
+├── internal/mqttclient/         # Paho connection, TLS configuration, reconnect
 ├── internal/audit/              # audit logging with slog
 ├── Dockerfile
-├── test/integration/            # Integrationstests, Compose-Dateien, Realm-JSON (Keycloak), Blueprint (authentik)
+├── test/integration/            # integration tests, Compose files, realm JSON (Keycloak), blueprint (authentik)
 ├── go.mod
 └── go.sum
 ```
@@ -1117,7 +1116,7 @@ Correlation in Go (conceptual):
 > |---|---|
 > | 20 concurrent requests on one response topic | ✅ all correctly correlated via `correlationData` |
 > | Reconnect, Clean Session, subscribed only once after startup | ❌ **no more responses**; `autopaho` does not resubscribe |
-> | Reconnect, Abonnement in `OnConnectionUp` | ✅ Antworten kommen an |
+> | Reconnect, subscription in `OnConnectionUp` | ✅ responses arrive |
 > | Reconnect, `SessionExpiryInterval` 60 s, subscribed once | ✅ `SessionPresent`, the broker session retains the subscription |
 > | `Publish` without a connection | ⚠️ immediate `ConnectionDownError`, does not wait for reconnect (`AwaitConnection` waits) |
 > | Connection drops after broker executes `createClient` (PUBACK and response lost), Clean Session | ⚠️ `Publish` does **not** end with the disconnect, only with the context timeout; the response is lost; the client **was created** |
@@ -1209,7 +1208,7 @@ REST scope v1 (all paths with prefix `/api/v1/`, Specification S-9):
 | `POST` | `/api/v1/clients/{username}/disable` | Disable client (password clients only, A-10) | `disableClient` |
 | `DELETE` | `/api/v1/clients/{username}` | Delete client | `deleteClient` |
 | `POST` | `/api/v1/clients/{username}/roles` | Assign role (optionally with `priority`) | `addClientRole` |
-| `DELETE` | `/api/v1/clients/{username}/roles/{role}` | Revoke role | `removeClientRole` |
+| `DELETE` | `/api/v1/clients/{username}/roles/{role}` | Remove role | `removeClientRole` |
 | `GET` | `/api/v1/groups` | List groups | `listGroups` |
 | `POST` | `/api/v1/groups` | Create group | `createGroup` |
 | `GET` | `/api/v1/groups/{group}` | Group details | `getGroup` |
@@ -1217,7 +1216,7 @@ REST scope v1 (all paths with prefix `/api/v1/`, Specification S-9):
 | `POST` | `/api/v1/groups/{group}/clients` | Add client to group | `addGroupClient` |
 | `DELETE` | `/api/v1/groups/{group}/clients/{username}` | Remove client from group | `removeGroupClient` |
 | `POST` | `/api/v1/groups/{group}/roles` | Assign role to group | `addGroupRole` |
-| `DELETE` | `/api/v1/groups/{group}/roles/{role}` | Revoke role from group | `removeGroupRole` |
+| `DELETE` | `/api/v1/groups/{group}/roles/{role}` | Remove role from group | `removeGroupRole` |
 | `GET` | `/api/v1/roles` | List roles | `listRoles` |
 | `POST` | `/api/v1/roles` | Create role, optionally with ACL list | `createRole` (with `acls`) |
 | `GET` | `/api/v1/roles/{role}` | Role details including ACLs | `getRole` |
@@ -1285,9 +1284,9 @@ transfers it to the device and discards it afterwards (Overview question 15).
 > `disableClient` affects only password authentication (Section 5.2).
 > For clients whose name begins with `CN=`, the service rejects
 > `POST /api/v1/clients/{username}/disable` and
-> `POST /api/v1/clients/{username}/enable` mit
-> `409 certificate_client` without sending a command to the broker
->   without sending a command to the broker. A certificate client is disabled only via
+> `POST /api/v1/clients/{username}/enable` with
+> `409 certificate_client`
+>   without sending a command to the broker. A certificate client is blocked only via
 >   `DELETE /api/v1/clients/{username}`; a successor receives
 >   a new subject (Section 5.4). `enable` and `disable` remain available
 >   for password clients. Mapping `disable` to
@@ -1313,7 +1312,7 @@ transfers it to the device and discards it afterwards (Overview question 15).
 | `acltype` | Required; only `publishClientSend`, `publishClientReceive`, `subscribeLiteral`, `subscribePattern`, `unsubscribeLiteral`, `unsubscribePattern` | `modifyRole` would silently omit unknown types |
 | `topic` | Required | Together with `acltype`, the key of an ACL |
 | `allow` | **Required**, no default | Without `allow`, DynSec creates a Deny rule |
-| `priority` | Optional, Standard 0, Bereich −100000 bis 100000 | Wie DynSec |
+| `priority` | Optional, default 0, range −100000 to 100000 | As in DynSec |
 
 If a deny rule does not have a higher priority than an allow rule
 of the same type in the same role, the response includes
@@ -1629,8 +1628,8 @@ Permissions via scopes:
 >   with the `security-admin` role or group (Keycloak and
 >   authentik below). The provider thereby enforces D-22, and the
 >   service remains independent of TasmoFleet roles.
-> - **TasmoFleet via Token Exchange:** TasmoFleet exchanges the
->   signed-in user's token with the same provider using Token Exchange (RFC 8693)
+> - **TasmoFleet via token exchange:** TasmoFleet exchanges the
+>   signed-in user's token with the same provider using token exchange (RFC 8693)
 >   for a token with `aud` = Security Service and the
 >   required scopes. `sub` remains the user, and the audit identifies the
 >   person who initiated a change. How TasmoFleet requests `write`
@@ -1650,7 +1649,7 @@ Token sources:
 
 | Caller | Flow | Scopes | Remark |
 |---|---|---|---|
-| TasmoFleet on behalf of a user | Token Exchange (RFC 8693) | `read`, `write` only for `security-admin` | TasmoFleet is a confidential client; `aud` of exchanged token is only the Security Service |
+| TasmoFleet on behalf of a user | Token exchange (RFC 8693) | `read`, `write` only for `security-admin` | TasmoFleet is a confidential client; `aud` of exchanged token is only the Security Service |
 | Administrator via `curl` | Device Authorization Grant | `read`, `write` only for `security-admin` | Browser login with second factor; username is in the token |
 | Scripts, monitoring, drift check | Client Credentials (service account) | `read` only | Separate client or service account for each caller |
 | Automated tests | Client Credentials | `read`, `write` | `msm-test-rw`, `msm-test-ro` (Section 7.9) |
@@ -1661,7 +1660,7 @@ Token sources:
     does not depend on the access path (T-8).
 -   Client scopes `read` and `write` with an audience mapper for the
     Security Service; `write` mapped to the `security-admin` role.
-    If the role is missing, Token Exchange responds with `200` and
+    If the role is missing, token exchange responds with `200` and
     `scope=read`.
 -   TasmoFleet client: confidential, “Standard Token Exchange” enabled
     (Keycloak 26.2 or later), `read`/`write` as optional client scopes.
@@ -1669,11 +1668,11 @@ Token sources:
     service account.
 -   Conditional login flow with OTP or WebAuthn for `security-admin`,
     including for the Device Authorization Grant.
--   `PMSS_OIDC_TYP_CHECK=bearer` (Standard).
+-   `PMSS_OIDC_TYP_CHECK=bearer` (default).
 
 **authentik** (via blueprints):
 
--   Minimum version 2026.8.3: Token Exchange is available starting with 2026.8.0 and
+-   Minimum version 2026.8.3: token exchange is available starting with 2026.8.0 and
     must be enabled for the provider under “Grant Types”; 2026.8.3
     fixes exchange without a signing key. Tested with 2026.8.6.
 -   Dedicated OAuth2 provider with its own application for the Security
@@ -1712,7 +1711,7 @@ For authentik, the token endpoint is
 with `grant_type=client_credentials`, the `client_id` of the Security Service
 provider, `username`, and an app password.
 
-Beispiel (Token Exchange in TasmoFleet, konzeptionell, Keycloak):
+Example (token exchange in TasmoFleet, conceptual, Keycloak):
 
 ``` bash
 curl -s -u tasmofleet:<client-secret> \
@@ -1726,8 +1725,8 @@ curl -s -u tasmofleet:<client-secret> \
 ```
 
 For authentik, use the same request with the authentik token endpoint and
-`audience` = Client-ID des Providers des Security Service
-(Spezifikation 2.2).
+`audience` = client ID of the Security Service's provider
+(Specification 2.2).
 
 Service configuration via environment variables: issuer (fixed
 value, T-8), optional JWKS URL (`PMSS_OIDC_JWKS_URL`, otherwise via
@@ -1751,7 +1750,7 @@ handlers.
 The internal proxy hop from NPM to the Go service can initially use HTTP within a
 protected Docker network. If end-to-end TLS encryption to the Go process is required,
 this hop must also be secured separately with TLS
-(`server.ListenAndServeTLS` mit `crypto/tls`).
+(`server.ListenAndServeTLS` with `crypto/tls`).
 
 The service itself receives only the permissions required for its task
 (`role_security_manager`). The admin certificate
@@ -1767,7 +1766,7 @@ duration of the operation:
 docker run --rm --network <mqtt-internal> \
   -v ~/internal-ca/breakglass:/bg:ro \
   -v ~/internal-ca/server-ca/ca.crt:/ca.crt:ro \
-  eclipse-mosquitto:2.1.2 \
+  eclipse-mosquitto:2.1.4 \
   mosquitto_ctrl -h mosquitto -p 8884 --cafile /ca.crt \
     --cert /bg/pmss-breakglass-admin.crt --key /bg/pmss-breakglass-admin.key \
     dynsec listClients
@@ -1914,8 +1913,8 @@ since the service writes no local state.
 |---|---|---|---|
 | Unit tests (`go test -race ./...`) | `httptest` test issuer with its own test keys | Token verification including error cases, handlers, validation, correlation, DynSec JSON | locally and in every workflow run |
 | Integration tests | Keycloak dev container with realm JSON | Full path: token from Keycloak → REST → MQTT/mTLS → DynSec | locally via Compose and in workflow `integration.yml` before image build |
-| authentik probe | authentik with blueprint | Tokens from authentik: scopes, audience, Token Exchange, issuer | locally via Compose (`test/integration/authentik`), not yet in CI |
-| Second factor | Keycloak or authentik | Browser and device code login, followed by Token Exchange | manually, one guide per provider (`SECOND-FACTOR.md`) |
+| authentik probe | authentik with blueprint | Tokens from authentik: scopes, audience, token exchange, issuer | locally via Compose (`test/integration/authentik`), not yet in CI |
+| Second factor | Keycloak or authentik | Browser and device code login, followed by token exchange | manually, one guide per provider (`SECOND-FACTOR.md`) |
 
 **Unit tests:** The test issuer is an `httptest` server that serves a
 JWKS and signs tokens with test keys. This makes it possible to
@@ -1947,7 +1946,7 @@ quickly test error cases without containers:
     tokens obtained from the host or from the Compose network (`keycloak:8080`)
     have the same `iss`. The service loads the
     keys from `keycloak:8080` via `PMSS_OIDC_JWKS_URL` (T-8).
--   Mosquitto **2.1.2** with DynSec, listener 8884 with
+-   Mosquitto **2.1.4** with DynSec, listener 8884 with
     `use_identity_as_username` and test Admin CA, pre-initialized
     `dynamic-security.json` as after bootstrap in Section 6.2:
     `pmss-admin` without a password and with `role_security_manager`, and the
@@ -2001,7 +2000,7 @@ Integration test cases (excerpt; all paths under `/api/v1/`):
 -   [ ] Obtain a token from `msm-test-rw`, create a client, assign a role,
     read the client, and delete it.
 -   [ ] Token from `msm-test-ro`: `GET` allowed, `POST` → `403`.
--   [ ] Token Exchange via `tasmofleet-test` for a user with
+-   [ ] Token exchange via `tasmofleet-test` for a user with
     `security-admin`: exchanged token with `aud` = Security Service,
     scope `write`, `sub` = user; modification allowed, audit shows the
     user.
@@ -2028,13 +2027,13 @@ Integration test cases (excerpt; all paths under `/api/v1/`):
 > |---|---|
 > | `msm-test-rw` (with `security-admin`) | ✅ `read write`, `aud` = Security Service |
 > | Service account with `write`, without `security-admin` | ✅ no `write` |
-> | Token Exchange for user with `security-admin` | ✅ `aud` is Security Service only, `read write`, `sub` and `preferred_username` = user |
-> | Token Exchange for user without `security-admin` | ✅ no `write` |
+> | Token exchange for user with `security-admin` | ✅ `aud` is Security Service only, `read write`, `sub` and `preferred_username` = user |
+> | Token exchange for user without `security-admin` | ✅ no `write` |
 > | Original TasmoFleet token | ✅ `aud` without Security Service |
 > | Exchange a token from another client | ✅ `403 Client is not within the token audience` |
 >
 > **Important for TasmoFleet:** If `write` is missing, Keycloak does not
-> treat this as an error. Token Exchange for a user without `security-admin`
+> treat this as an error. Token exchange for a user without `security-admin`
 > responds with `200` and `scope=read`. TasmoFleet must check the `scope` of the
 > exchanged token instead of relying on an error
 > (Specification S-16).
@@ -2047,7 +2046,7 @@ Integration test cases (excerpt; all paths under `/api/v1/`):
     scope mappings `read` and `write`, trust for `tasmofleet-test`
     and an expression policy allowing `write` only for the
     `security-admin` group.
--   Provider `tasmofleet-test` with Token Exchange, and another provider
+-   Provider `tasmofleet-test` with token exchange, and another provider
     `other-app` for negative tests.
 -   Group `security-admin`, users `alice` (in group) and `bob`,
     service accounts `msm-test-rw`, `msm-test-ro`, `msm-test-rw-norole`
@@ -2062,9 +2061,9 @@ Integration test cases (excerpt; all paths under `/api/v1/`):
 > |---|---|
 > | Signature, issuer | ✅ `RS256`, `kid` in the JWKS of provider `pmss`, `iss` = Discovery |
 > | `msm-test-rw`, `msm-test-ro` | ✅ `read write` or `read` only, `aud` = Security Service |
-> | `write` without `security-admin` (service account, Token Exchange) | ✅ no `write` – ⚠️ the entire request is rejected (`400 invalid_grant`) |
-> | Token Exchange for user with `security-admin` | ✅ `aud` is Security Service only, `read write`, `sub` and `preferred_username` = user |
-> | Token Exchange with `read` only for user without `security-admin` | ✅ `read` |
+> | `write` without `security-admin` (service account, token exchange) | ✅ no `write` – ⚠️ the entire request is rejected (`400 invalid_grant`) |
+> | Token exchange for user with `security-admin` | ✅ `aud` is Security Service only, `read write`, `sub` and `preferred_username` = user |
+> | Token exchange with `read` only for user without `security-admin` | ✅ `read` |
 > | Original TasmoFleet token | ✅ `aud` without Security Service |
 > | Exchange to a provider without trust for TasmoFleet | ✅ rejected (`invalid_target`) |
 > | Exchange a token from the Security Service or `other-app` | ✅ rejected (`invalid_grant`) |
@@ -2080,7 +2079,7 @@ Integration test cases (excerpt; all paths under `/api/v1/`):
 **Second factor:** For each provider, a guide describes the
 manual test of SEC-36 (`test/integration/keycloak/SECOND-FACTOR.md`,
 `test/integration/authentik/SECOND-FACTOR.md`): browser
-and Device Code login with a second factor, followed by Token Exchange, and
+and Device Code login with a second factor, followed by token exchange, and
 confirmation that no path without a second factor yields a token with `write`.
 The paths without browser login are critical: the Keycloak test client's
 Password Grant, and the authentik app password. The authentik
@@ -2204,7 +2203,7 @@ cases `t-*` and `app-*` (8883 = 8883, 8887 = 8885). Control API behavior
 | SEC-17 | DynSec admins (`pmss-admin`, `pmss-breakglass-admin`, and their numbered successors) have no password; they authenticate on listener 8884 only using an Admin CA certificate. The broker rejects them on all other listeners. |
 | SEC-18 | The Admin CA issues certificates only for admin identities. After bootstrap, neither a DynSec admin with a password nor the `admin` role exists. |
 | SEC-19 | `role_security_manager` has access only to `$CONTROL/dynamic-security/#` and `$SYS/#`, with no access to application topics. |
-| SEC-20 | Admin certificates are disabled using `deleteClient` (or by revoking roles), not `disableClient`. The REST API rejects `enable`/`disable` for certificate clients (A-10). |
+| SEC-20 | Admin certificates are blocked using `deleteClient` (or by revoking roles), not `disableClient`. The REST API rejects `enable`/`disable` for certificate clients (A-10). |
 | SEC-21 | TLS listeners 8883 and 8885 accept TLS 1.2 or higher (`tls_version tlsv1.2`). |
 | SEC-22 | Listener 8885 accepts only certificates from the App CA and uses the subject as the username (`use_subject_as_username`). No listener using client certificates trusts more than one client CA. |
 | SEC-23 | The App CA issues only subjects `/O=mqtt-apps/CN=<name>`. Certificate clients have no password; password clients have neither `=` nor `,` in their names; `pmss-*` and `role_security_manager` are reserved. The subject of a certificate disabled due to compromise is not reused. |
@@ -2218,9 +2217,9 @@ cases `t-*` and `app-*` (8883 = 8883, 8887 = 8885). Control API behavior
 | SEC-31 | Modifying requests for existing objects require `If-Match`; if the state differs, nothing is changed (`412`). |
 | SEC-32 | Audit events contain before and after state, never passwords or password hashes. |
 | SEC-33 | The host backs up `dynamic-security.json` regularly, independently of TasmoFleet and the Security Service. |
-| SEC-34 | TasmoFleet calls the service only with user tokens exchanged via Token Exchange (`aud` = Security Service, `sub` = user), not with its own service account with `write`. |
+| SEC-34 | TasmoFleet calls the service only with user tokens exchanged via token exchange (`aud` = Security Service, `sub` = user), not with its own service account with `write`. |
 | SEC-35 | No service account has the `write` scope in production. |
-| SEC-36 | The second factor for `security-admin` is enforced by the OIDC provider for every login path leading to a token with scope `write` (browser, Device Authorization Grant, then Token Exchange). |
+| SEC-36 | The second factor for `security-admin` is enforced by the OIDC provider for every login path leading to a token with scope `write` (browser, Device Authorization Grant, then token exchange). |
 | SEC-37 | Error responses (`detail`, `errors`) and warnings never contain passwords, password hashes, or tokens. |
 | SEC-38 | Request bodies are limited to `limits.maxRequestBytes` (at least 1 MiB); larger bodies are rejected with `413` without processing. |
 | SEC-39 | If JWKS retrieval uses the internal network (`PMSS_OIDC_JWKS_URL`), the shared network with the OIDC provider is restricted to the required containers. |
@@ -2400,7 +2399,7 @@ basis for Phase 7.
 -   [ ] Configure NPM reverse proxy and HTTPS.
 -   [ ] Configure production OIDC provider (configuration as code): scopes
     `read`/`write` with audience set to the Security Service, `write` only
-    for `security-admin`; TasmoFleet client with Token Exchange; client
+    for `security-admin`; TasmoFleet client with token exchange; client
     for the Device Authorization Grant; read-only service accounts;
     login flow with a second factor for `security-admin`. No
     service accounts with `write`. Keycloak: fixed hostname
@@ -2487,8 +2486,8 @@ After recovery, verify:
 | Syslog format | The inventory assumes that phylax-syslog-service writes one message per line. |
 | Listener configuration | Tested with `plugin` (global) and `per_listener_settings false`. `plugin_load`/`plugin_use` has not been tested and is not used until then. |
 | DynSec admin permissions | The service needs Control API permissions, but no permissions on regular MQTT topics. The `admin` role from `dynsec init` reads `#` and is therefore replaced by `role_security_manager` and deleted. |
-| Admin CA | Whoever has the Admin CA key can issue admin certificates. Keep the key offline, issue only two admin certificates, disable via `deleteClient`. |
-| Disabling admins | `disableClient` does not disable certificate authentication; the client retains its permissions. Disable only with `deleteClient` or by revoking roles (SEC-20). |
+| Admin CA | Whoever has the Admin CA key can issue admin certificates. Keep the key offline, issue only two admin certificates, block via `deleteClient`. |
+| Blocking admins | `disableClient` does not block certificate authentication; the client retains its permissions. Block only with `deleteClient` or by revoking roles (SEC-20). |
 | Unknown CNs | A certificate from the Admin CA with an unknown CN can connect (without permissions). Controlled by the Admin CA issuance rule (SEC-18). The same applies to unknown subjects on 8885. |
 | App CA | Whoever has the App CA key can issue certificates for any application and obtain its permissions, but never admin permissions (`use_subject_as_username`). Keep the key offline; TasmoFleet will later receive its own signing key (form open, Section 5.4). |
 | Marker via `textdescription` | Whoever sets or removes the marker using `mosquitto_ctrl` (break-glass) changes what the Security Service is allowed to manage. This is intentional (adoption or protection), but must be done deliberately. |
@@ -2512,7 +2511,7 @@ After recovery, verify:
 | Second factor only in provider | The service does not check `acr`/`amr`. A misconfigured login flow (e.g. a login path without a condition) would allow `write` without a second factor. Configuration as code, review checks, and manual test per provider (Section 7.9). |
 | authentik app passwords | An app password provides a user token without browser login. If it can be exchanged for a token with `write`, the second factor is bypassed. Test F-7 deferred; possible mitigations in `test/integration/authentik/SECOND-FACTOR.md`. |
 | ~~Client-scope role mapping~~ | ✅ Resolved: Keycloak 26.8.2 does not grant `write` without `security-admin`, including to service accounts (integration test, Section 7.9). |
-| Token Exchange | TasmoFleet needs a client secret for the exchange; whoever has it can exchange user tokens for service tokens, but only with the respective user's permissions. |
+| Token exchange | TasmoFleet needs a client secret for the exchange; whoever has it can exchange user tokens for service tokens, but only with the respective user's permissions. |
 | Provider availability | If the OIDC provider is unreachable, no new tokens can be issued; cached JWKS keys still allow valid tokens to be verified. `pmss-breakglass-admin` remains available for emergencies. |
 | Docker host | A compromised or privileged Docker host can access container networks and keys. |
 | Partial success in API calls | Multiple DynSec commands do not form a transaction. Compensation path for `POST /api/v1/clients` (Section 7.4) and `POST /api/v1/roles` (Section 7.3); ACL lists are replaced using `modifyRole` in one command. |
@@ -2545,7 +2544,7 @@ The rationales are provided in the respective sections.
 > **API access and tests** (Sections 7.5, 7.9)
 > - ✅ No web GUI; REST API only with bearer tokens from configured OIDC provider (tested: Keycloak, authentik), scopes `read`/`write`; ❌ no browser login, no sessions
 > - ✅ T-1: Service checks scopes only; provider issues `write` only to `security-admin`; ❌ no role, group, or `acr`/`amr` checks in the service
-> - ✅ T-2: TasmoFleet uses Token Exchange (RFC 8693) with the user's token at the same provider
+> - ✅ T-2: TasmoFleet uses token exchange (RFC 8693) with the user's token at the same provider
 > - ✅ T-3: Second factor only in the provider
 > - ✅ T-4: No service accounts with `write` in production; administrators use Device Authorization Grant
 > - ✅ T-5: No audit endpoint; TasmoFleet maintains the audit of approvals
@@ -2563,7 +2562,7 @@ The rationales are provided in the respective sections.
 > - ✅ E-5: Bootstrap offline in a container without a network
 > - ✅ E-6: Listener 8884 configured before DynSec activation
 > - ✅ E-7: Plugin configuration as tested (`plugin` global, `per_listener_settings false`)
-> - ✅ Disable using `deleteClient`; ❌ `disableClient` is not a way to disable certificate clients
+> - ✅ Block using `deleteClient`; ❌ `disableClient` is not a way to block certificate clients
 
 > **Listeners and TLS** (Sections 4.1, 5.4)
 > - ✅ L-1: TLS listener 8883 (password) as a separate phase after the functional test
@@ -2614,7 +2613,7 @@ The rationales are provided in the respective sections.
 
 ### Open issues
 
--   [ ] Test the bootstrap using the production image `eclipse-mosquitto:2.1.2`
+-   [ ] Test the bootstrap using the production image `eclipse-mosquitto:2.1.4`
     and `--network none` (so far tested with Mosquitto 2.1.2 from
     source and a listener bound only to `127.0.0.1`).
 -   [ ] Production: choose key retrieval over the internal network
@@ -2639,7 +2638,7 @@ The rationales are provided in the respective sections.
 
 The first production migration step is considered successful when:
 
--   [ ] DynSec is enabled on Mosquitto 2.1.2.
+-   [ ] DynSec is enabled on Mosquitto 2.1.4.
 -   [ ] `password_file` and `acl_file` are no longer used for
     authentication or ACL checks.
 -   [ ] `allow_anonymous false` remains in effect.
