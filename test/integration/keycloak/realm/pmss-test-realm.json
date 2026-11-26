@@ -102,6 +102,7 @@
   "clients": [
     {
       "clientId": "phylax-mqtt-security-service",
+      "fullScopeAllowed": false,
       "enabled": true,
       "publicClient": false,
       "secret": "unused",
@@ -116,6 +117,7 @@
     },
     {
       "clientId": "msm-test-rw",
+      "fullScopeAllowed": false,
       "enabled": true,
       "publicClient": false,
       "secret": "msm-test-rw-secret",
@@ -132,6 +134,7 @@
     },
     {
       "clientId": "msm-test-ro",
+      "fullScopeAllowed": false,
       "enabled": true,
       "publicClient": false,
       "secret": "msm-test-ro-secret",
@@ -147,6 +150,7 @@
     },
     {
       "clientId": "msm-test-rw-norole",
+      "fullScopeAllowed": false,
       "enabled": true,
       "publicClient": false,
       "secret": "msm-test-rw-norole-secret",
@@ -163,6 +167,7 @@
     },
     {
       "clientId": "pmss-api-tester",
+      "fullScopeAllowed": false,
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
@@ -189,6 +194,7 @@
     },
     {
       "clientId": "pmss-cli",
+      "fullScopeAllowed": false,
       "name": "Administrator via curl (device authorization grant)",
       "enabled": true,
       "publicClient": true,
@@ -210,6 +216,7 @@
     },
     {
       "clientId": "tasmofleet-test",
+      "fullScopeAllowed": false,
       "enabled": true,
       "publicClient": false,
       "secret": "tasmofleet-test-secret",
