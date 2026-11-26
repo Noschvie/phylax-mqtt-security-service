@@ -1,0 +1,26 @@
+name: tmp go get
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  go-get:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.x
+          check-latest: true
+      - run: |
+          go get github.com/gorilla/websocket@v1.5.4-0.20240701034025-d67f41855da4
+          go mod tidy
+          git diff
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gomod
+          path: |
+            go.mod
+            go.sum
