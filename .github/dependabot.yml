@@ -57,3 +57,11 @@ updates:
     groups:
       openapi-check:
         patterns: ["*"]
+    # openapi-core 0.23.1 (newest) requires openapi-spec-validator <0.9
+    # and openapi-schema-validator <0.9. Remove this once a release of
+    # openapi-core allows the newer versions.
+    ignore:
+      - dependency-name: openapi-spec-validator
+        versions: [">=0.9.0"]
+      - dependency-name: openapi-schema-validator
+        versions: [">=0.9.0"]

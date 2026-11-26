@@ -46,7 +46,8 @@ jobs:
       - name: go test (unit)
         env:
           PMSS_TEST_RECORD_DIR: ${{ runner.temp }}/records
-        run: go test -race ./...
+        # -count=1: a cached test result writes no records.
+        run: go test -race -count=1 ./...
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
