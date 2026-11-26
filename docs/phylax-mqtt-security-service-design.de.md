@@ -4,7 +4,7 @@
 **Version:** 1.1\
 **Datum:** 25. November 2026\
 **Zielumgebung:** Mosquitto in [IOTstack](https://github.com/SensorsIot/IOTstack) (Docker Compose)\
-**Broker:** Eclipse Mosquitto ab 2.1, getestet mit 2.1.2\
+**Broker:** Eclipse Mosquitto ab 2.1, getestet mit 2.1.2, Integrationstests und Produktion mit 2.1.4\
 **Identity Provider:** OIDC-Provider mit Token Exchange nach RFC 8693; getestet mit Keycloak 26.8.2 und authentik 2026.8.6, mindestens Keycloak 26.2 bzw. authentik 2026.8.3\
 **Implementierungssprache:** Go\
 **Projektname:** Phylax MQTT Security Service\
@@ -691,7 +691,7 @@ Ablauf (am 20.11.2026 mit Mosquitto 2.1.2 erfolgreich durchgespielt):
     ``` bash
     docker run --rm -it --network none \
       -v ~/IOTstack/volumes/mosquitto/data:/mosquitto/data \
-      eclipse-mosquitto:2.1.2 \
+      eclipse-mosquitto:2.1.4 \
       mosquitto_ctrl dynsec init /mosquitto/data/dynamic-security.json \
       dynsec-bootstrap
     ```
@@ -1790,7 +1790,7 @@ Dauer des Einsatzes eingebunden:
 docker run --rm --network <mqtt-internal> \
   -v ~/internal-ca/breakglass:/bg:ro \
   -v ~/internal-ca/server-ca/ca.crt:/ca.crt:ro \
-  eclipse-mosquitto:2.1.2 \
+  eclipse-mosquitto:2.1.4 \
   mosquitto_ctrl -h mosquitto -p 8884 --cafile /ca.crt \
     --cert /bg/pmss-breakglass-admin.crt --key /bg/pmss-breakglass-admin.key \
     dynsec listClients
@@ -1971,7 +1971,7 @@ sich Fehlerfälle schnell und ohne Container prüfen:
     Tokens, die vom Host oder aus dem Compose-Netz (`keycloak:8080`)
     geholt werden, haben denselben `iss`. Der Service lädt die
     Schlüssel über `PMSS_OIDC_JWKS_URL` von `keycloak:8080` (T-8).
--   Mosquitto **2.1.2** mit DynSec, Listener 8884 mit
+-   Mosquitto **2.1.4** mit DynSec, Listener 8884 mit
     `use_identity_as_username` und Test-Admin-CA, vorinitialisierte
     `dynamic-security.json` wie nach dem Bootstrap aus Abschnitt 6.2:
     `pmss-admin` ohne Passwort mit `role_security_manager` und der
@@ -2652,7 +2652,7 @@ verwendet. Die Begründungen stehen in den jeweiligen Abschnitten.
 
 ### Offene Punkte
 
--   [ ] Bootstrap mit dem produktiven Image `eclipse-mosquitto:2.1.2`
+-   [ ] Bootstrap mit dem produktiven Image `eclipse-mosquitto:2.1.4`
     und `--network none` durchspielen (bisher mit Mosquitto 2.1.2 aus
     dem Quellcode und einem Listener nur auf `127.0.0.1`).
 -   [ ] Produktiv: Schlüsselabruf über das interne Netz
@@ -2677,7 +2677,7 @@ verwendet. Die Begründungen stehen in den jeweiligen Abschnitten.
 
 Der erste produktive Migrationsschritt gilt als erfolgreich, wenn:
 
--   [ ] DynSec ist auf Mosquitto 2.1.2 aktiviert.
+-   [ ] DynSec ist auf Mosquitto 2.1.4 aktiviert.
 -   [ ] `password_file` und `acl_file` werden nicht mehr für die
     Authentifizierung bzw. ACL-Prüfung verwendet.
 -   [ ] `allow_anonymous false` bleibt wirksam.

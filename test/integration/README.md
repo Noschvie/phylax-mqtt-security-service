@@ -5,7 +5,7 @@ The integration tests of the design document (section 7.9) in one compose enviro
 | Service | Image | Host port | Role |
 |---|---|---|---|
 | `keycloak` | Keycloak 26.8.2, realm [`pmss-test`](keycloak/README.md) | 8180, 8190 (health) | Token issuer |
-| `mosquitto` | Mosquitto 2.1.2 with Dynamic Security, [test PKI](broker/README.md) | 18883 (password), 18884 (admin, mTLS) | Broker |
+| `mosquitto` | Mosquitto 2.1.4 with Dynamic Security, [test PKI](broker/README.md) | 18883 (password), 18884 (admin, mTLS) | Broker |
 | `pmss` | Built from this repository, read-only, certificates read-only | 18080 | Service under test |
 
 The service uses the production defaults (`mqtts://mosquitto:8884`, certificate paths under `/run`). Only the token check is configured: issuer `http://127.0.0.1:8180/realms/pmss-test`, JWKS via `keycloak:8080` (`PMSS_OIDC_JWKS_URL`), http allowed for the test.
