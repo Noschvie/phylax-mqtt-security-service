@@ -19,7 +19,7 @@ python3 check_tokens.py
 docker compose down -v
 ```
 
-Expected: 10 × `PASS`, exit code 0. CI runs the same check in the combined environment ([../README.md](../README.md), `.github/workflows/integration.yml`).
+Expected: 11 × `PASS`, exit code 0. CI runs the same check in the combined environment ([../README.md](../README.md), `.github/workflows/integration.yml`).
 
 `KC_HOSTNAME` fixes the issuer to `http://127.0.0.1:8180/realms/pmss-test`, whatever host name a request uses. Tests on the host get their tokens via `127.0.0.1:8180`; the service in the compose network fetches the JWKS via `keycloak:8080`.
 
@@ -29,6 +29,7 @@ Expected: 10 × `PASS`, exit code 0. CI runs the same check in the combined envi
 |---|---|
 | Client scopes `read`, `write` | Audience mapper on the Security Service (`phylax-mqtt-security-service`) |
 | Scope `write` | Role scope mapping on realm role `security-admin`: only users and service accounts with this role get `write` |
+| All clients | `fullScopeAllowed: false` (the switch is deprecated in Keycloak 26). No client has role scope mappings of its own: `write` depends only on the role scope mapping of the scope, the tokens carry no realm roles |
 | Client scope `basic` | Mappers for `sub` and `preferred_username` (see below) |
 | `phylax-mqtt-security-service` | Target client of the audience; no login |
 | `msm-test-rw` | Service account with `read`, `write` and role `security-admin` |
