@@ -13,7 +13,18 @@ So far this repository contains:
 - [Keycloak integration test](test/integration/keycloak/README.md) – checks scopes, audience, the role mapping of scope `write` and Standard Token Exchange against Keycloak 26.8.2.
 - [JWT probe](test/probes/jwt-go-oidc/README.md) – token verification with `coreos/go-oidc/v3`, template for `internal/auth`.
 
-Broker-side tests (Mosquitto 2.1.2 with Dynamic Security) live in [mqtt-acl-verify](https://github.com/Noschvie/mqtt-acl-verify).
+## Related projects
+
+| Layer | Repository | Tests |
+|---|---|---|
+| Broker | [mqtt-acl-verify](https://github.com/Noschvie/mqtt-acl-verify) | ACLs and Dynamic Security directly against Mosquitto (test brokers with Classic ACL and DynSec, Mosquitto 2.1.4) |
+| Service | this repository | Unit and integration tests: token → REST → MQTT/mTLS → DynSec |
+| API from outside | [pmss-api-tester](https://github.com/Noschvie/pmss-api-tester) | Read-only API explorer and conformance checks against a running stack |
+
+The broker tests in mqtt-acl-verify came first: the design of PMSS builds on their results, among
+them the behaviour of the DynSec control API (`correlationData`, one response per command), the
+reconnect of `autopaho`, the placeholders `%u`/`%c` in DynSec ACLs and the import of the existing
+`pwfile`. The design document refers to the individual cases.
 
 ## Documents
 
