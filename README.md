@@ -9,7 +9,7 @@ So far this repository contains:
 - The service (`cmd/`, `internal/`).
 - [OpenAPI document](api/openapi.yaml) – machine-readable form of the specification, checked against routes and recorded responses ([test/openapi](test/openapi/README.md)).
 - [Integration tests](test/integration/README.md) – Keycloak, Mosquitto and the service in one compose environment; the whole path token → REST → MQTT/mTLS → DynSec.
-- [Broker integration test](test/integration/broker/README.md) – the broker connection against Mosquitto 2.1.2 with Dynamic Security.
+- [Broker integration test](test/integration/broker/README.md) – the broker connection against Mosquitto 2.1.4 with Dynamic Security.
 - [Keycloak integration test](test/integration/keycloak/README.md) – checks scopes, audience, the role mapping of scope `write` and Standard Token Exchange against Keycloak 26.8.2.
 - [JWT probe](test/probes/jwt-go-oidc/README.md) – token verification with `coreos/go-oidc/v3`, template for `internal/auth`.
 

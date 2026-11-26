@@ -1,6 +1,6 @@
 # Broker integration test
 
-Mosquitto 2.1.2 with Dynamic Security for the tests of the broker connection (design sections 7.2 and 7.9). The admin listener is configured as in production: only certificates of the admin CA, the CN is the user name, no password.
+Mosquitto 2.1.4 with Dynamic Security for the tests of the broker connection (design sections 7.2 and 7.9). The admin listener is configured as in production: only certificates of the admin CA, the CN is the user name, no password.
 
 | File | Content |
 |---|---|

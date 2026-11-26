@@ -2,7 +2,7 @@ name: Integration
 
 # Integration tests of design 7.9 in one compose environment
 # (test/integration/compose.yaml): Keycloak 26.8.2 with the test realm,
-# Mosquitto 2.1.2 with Dynamic Security and the service built from this
+# Mosquitto 2.1.4 with Dynamic Security and the service built from this
 # commit. Covers the tokens of Keycloak, the broker connection and the
 # whole path token → REST → MQTT/mTLS → DynSec.
 #
