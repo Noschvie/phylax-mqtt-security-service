@@ -228,7 +228,7 @@ Details zur API stehen in der Schnittstellenspezifikation, zu Deployment und Imp
 
 **Broker**
 
-- Mosquitto ab 2.1 (getestet mit 2.1.2) mit Dynamic Security, z. B. in [IOTstack](https://github.com/SensorsIot/IOTstack) (Docker Compose),
+- Mosquitto ab 2.1 (getestet mit 2.1.2, Integrationstests und Produktion mit 2.1.4) mit Dynamic Security, z. B. in [IOTstack](https://github.com/SensorsIot/IOTstack) (Docker Compose),
 - Initialisierung und Aktivierung des Plugins bleiben Aufgabe des Broker-Administrators; die Ersteinrichtung läuft offline in einem Container ohne Netzwerk (PMSS 6.2).
 
 ### 5.3 Ausgangszustand und Ziel
@@ -702,7 +702,7 @@ Werden gesammelt und später als Feature-Issue bei hellwand/tasmofleet eingebrac
 
 ## 13. Zusammenfassung
 
-Mosquitto 2.1.2 bleibt der Broker. Die Verwaltung über `password_file` und `acl_file` wird durch Dynamic Security ersetzt, zuerst manuell mit `mosquitto_ctrl` und danach über PMSS.
+Mosquitto bleibt der Broker (Produktion mit 2.1.4). Die Verwaltung über `password_file` und `acl_file` wird durch Dynamic Security ersetzt, zuerst manuell mit `mosquitto_ctrl` und danach über PMSS.
 
 Die erste Migration ist klein und kompatibel: Der gemeinsame Bestandsbenutzer behält sein Passwort (der Hash wird übernommen) und erhält eine Legacy-Rolle ohne `$SYS` und `$CONTROL`. Kein Gerät wird angefasst; `pwfile` bleibt als Rückfallweg. Danach wird eine Woche lang das Topic-Inventar erfasst. Eingeschränkt wird erst mit individuellen Zugangsdaten nach PMSS.
 

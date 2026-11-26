@@ -228,7 +228,7 @@ Details on the API are in the interface specification, details on deployment and
 
 **Broker**
 
-- Mosquitto 2.1 or later (tested with 2.1.2) with Dynamic Security, e.g. in [IOTstack](https://github.com/SensorsIot/IOTstack) (Docker Compose),
+- Mosquitto 2.1 or later (tested with 2.1.2, integration tests and production with 2.1.4) with Dynamic Security, e.g. in [IOTstack](https://github.com/SensorsIot/IOTstack) (Docker Compose),
 - initialising and activating the plugin remain the task of the broker administrator; the initial setup runs offline in a container without network (PMSS 6.2).
 
 ### 5.3 Initial state and target
@@ -702,7 +702,7 @@ These are collected and will later be submitted as a feature issue to hellwand/t
 
 ## 13. Summary
 
-Mosquitto 2.1.2 remains the broker. Management via `password_file` and `acl_file` is replaced by Dynamic Security, first manually with `mosquitto_ctrl` and then via PMSS.
+Mosquitto remains the broker (production with 2.1.4). Management via `password_file` and `acl_file` is replaced by Dynamic Security, first manually with `mosquitto_ctrl` and then via PMSS.
 
 The first migration is small and compatible: the existing shared user keeps its password (the hash is taken over) and gets a legacy role without `$SYS` and `$CONTROL`. No device is touched; `pwfile` stays as fallback. After that, the topic inventory is recorded for one week. Restrictions only come with individual credentials after PMSS.
 
