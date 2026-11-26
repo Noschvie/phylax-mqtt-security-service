@@ -5,7 +5,7 @@
 # Test material only: created per run, world-readable for the authentik
 # containers and never committed.
 #
-#   ./make-keys.sh [DIR]      default DIR: ./run
+#   make-keys.sh [DIR]        default DIR: run/ next to this script
 #
 # DIR/signing.crt, DIR/signing.key   RSA 2048, self-signed, read by the
 #                                    blueprint (!File) as keypair
@@ -16,7 +16,8 @@
 # provider without signing key signs with HS256 and the client secret.
 set -eu
 
-DIR=${1:-./run}
+HERE=$(cd "$(dirname "$0")" && pwd)
+DIR=${1:-$HERE/run}
 rm -rf "$DIR"
 mkdir -p "$DIR"
 openssl req -x509 -newkey rsa:2048 -nodes -days 7 \

@@ -5,7 +5,7 @@
 # (design sections 5.1, 6.2, 7.9). Test material only: keys are created per
 # run, are world-readable for the broker container and are never committed.
 #
-#   ./make-certs.sh [DIR]      default DIR: ./run
+#   make-certs.sh [DIR]        default DIR: run/ next to this script
 #
 # DIR/certs:
 #   server-ca.crt                 trusted by the Security Service
@@ -17,8 +17,8 @@
 # DIR/data/dynamic-security.json  state after the offline bootstrap (design 6.2)
 set -eu
 
-DIR=${1:-./run}
 HERE=$(cd "$(dirname "$0")" && pwd)
+DIR=${1:-$HERE/run}
 rm -rf "$DIR"
 mkdir -p "$DIR/certs" "$DIR/data"
 DIR=$(cd "$DIR" && pwd) # absolute, the script changes into certs/
