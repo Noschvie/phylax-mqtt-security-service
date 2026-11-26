@@ -38,8 +38,8 @@ updates:
       day: monday
 
   # Images of the test stacks (Keycloak, Mosquitto, PostgreSQL).
-  # Mosquitto stays on the production version (2.1.2): merge an update
-  # of it only together with the update of production.
+  # Mosquitto follows the production version: merge an update of it
+  # only together with the update of production.
   # The authentik tag is set via ${AUTHENTIK_TAG:-…} and is checked by hand.
   - package-ecosystem: docker-compose
     directories:
