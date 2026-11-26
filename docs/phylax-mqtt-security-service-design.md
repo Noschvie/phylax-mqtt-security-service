@@ -130,37 +130,22 @@ existing password therefore remains valid (tested on 20.11.2026 with Mosquitto
 
 ### 3.2 Communication paths
 
-``` text
-External admin clients / applications
-                |
-                | HTTPS :443
-                v
-       Nginx Proxy Manager
-                |
-                | internal proxy network (HTTP)
-                v
-   Phylax MQTT Security Service
-     Go / net/http REST API
-     Debian slim container
-                |
-                | MQTT 5 over TLS + mTLS
-                | (Eclipse Paho Go, crypto/tls)
-                | internal Docker network, port 8884
-                | login only with admin certificate (CN = pmss-admin)
-                v
-          Mosquitto Broker
-          DynSec Plugin
-                |
-                +---- Devices without TLS ............. :1883 (password)
-                +---- Devices/applications with TLS     :8883 (TLS + password)
-                +---- Applications "TLS required" ..... :8885 (app certificate only)
-```
+![Target architecture with browser, OIDC provider, TasmoFleet, NPM, PMSS, Mosquitto and MQTT clients. The seven numbered communication paths are described in the interface specification.](pmss-architecture.svg)
 
-The REST API and the MQTT Control API are two different
-interfaces:
+*Figure 1: Target architecture and communication paths. The numbers
+identify connections, not a fixed sequence; the paths are described in
+the [interface specification, section 1.1](mqtt-security-service-api-v1.md#11-block-diagram).*
 
--   REST is the interface for admin UIs and other
-    management applications.
+For (3), PMSS retrieves the public keys (JWKS) from the OIDC provider;
+the arrow shows the direction of the returned keys. For (4), NPM
+terminates HTTPS and forwards requests over HTTP on the internal proxy
+network to PMSS. Connection (5) uses the private Docker network and an
+admin certificate with `CN=pmss-admin`. Port 8885 in (7) is reserved
+for applications with an app certificate.
+
+The REST API and the MQTT Control API are two different interfaces:
+
+-   REST is the interface for admin UIs and other management applications.
 -   MQTT is the internal interface through which the Security Service
     sends DynSec commands to Mosquitto.
 

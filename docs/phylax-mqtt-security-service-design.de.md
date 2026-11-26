@@ -132,44 +132,27 @@ enthält.
 
 ### 3.2 Kommunikationswege
 
-``` text
-Externe Admin-Clients / Anwendungen
-                |
-                | HTTPS :443
-                v
-       Nginx Proxy Manager
-                |
-                | internes Proxy-Netz (HTTP)
-                v
-   Phylax MQTT Security Service
-     Go / net/http REST API
-     Debian-Slim-Container
-                |
-                | MQTT 5 over TLS + mTLS
-                | (Eclipse Paho Go, crypto/tls)
-                | internes Docker-Netz, Port 8884
-                | Anmeldung nur per Admin-Zertifikat (CN = pmss-admin)
-                v
-          Mosquitto Broker
-          DynSec Plugin
-                |
-                +---- Geräte ohne TLS ........... :1883 (Passwort)
-                +---- Geräte/Anwendungen mit TLS  :8883 (TLS + Passwort)
-                +---- Anwendungen „TLS erforderlich“
-                                                  :8885 (nur App-Zertifikat)
-```
+![Zielarchitektur mit Browser, OIDC-Provider, TasmoFleet, NPM, PMSS, Mosquitto und MQTT-Clients. Die sieben nummerierten Kommunikationswege werden in der Schnittstellenspezifikation erläutert.](pmss-architecture.de.svg)
 
-Die REST-API und die MQTT-Control-API sind zwei unterschiedliche
-Schnittstellen:
+*Abbildung 1: Architektur-Zielbild und Kommunikationswege.
+Die Nummern kennzeichnen Verbindungen, keine feste zeitliche Reihenfolge; eine
+Beschreibung der Wege steht in der [Schnittstellenspezifikation, Abschnitt 1.1](mqtt-security-service-api-v1.de.md#11-blockschaltbild).*
 
--   REST ist die Schnittstelle für Admin-UIs und andere
-    Management-Anwendungen.
+Bei (3) ruft PMSS die öffentlichen Schlüssel (JWKS) beim OIDC-Provider
+ab; der Pfeil zeigt die Richtung der zurückgegebenen Schlüssel. Bei (4)
+terminiert NPM HTTPS und leitet die Anfragen über HTTP im internen
+Proxy-Netz an PMSS weiter. Verbindung (5) nutzt das private Docker-Netz
+und ein Admin-Zertifikat mit `CN=pmss-admin`. Port 8885 in (7) ist
+Anwendungen mit App-Zertifikat vorbehalten.
+
+Die REST-API und die MQTT-Control-API sind zwei unterschiedliche Schnittstellen:
+
+-   REST ist die Schnittstelle für Admin-UIs und andere Management-Anwendungen.
 -   MQTT ist die interne Schnittstelle, über die der Security Service
     DynSec-Kommandos an Mosquitto sendet.
 
 Der Security Service soll nicht direkt die Datei `dynamic-security.json`
-bearbeiten. Änderungen erfolgen über die offizielle MQTT-Control-API des
-Plugins.
+bearbeiten. Änderungen erfolgen über die offizielle MQTT-Control-API des Plugins.
 
 ### 3.3 Technologieentscheidung Security Service
 
